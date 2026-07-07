@@ -7,6 +7,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      colors: {
+        paper: "#f6f7f9",
+        ink: "#141821",
+        brass: "#9a6b2f"
+      },
       fontFamily: {
         sans: ["DM Sans", "Inter", "system-ui", "sans-serif"],
         mono: ["DM Mono", "SFMono-Regular", "monospace"]
