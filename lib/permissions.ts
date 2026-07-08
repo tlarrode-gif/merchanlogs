@@ -38,6 +38,11 @@ export type Permission =
   // Picking
   | "picking.view"
   | "picking.manage"
+  // Importaciones / carga masiva
+  | "imports.view"
+  | "imports.manage"
+  // Simulacion de solicitud desde OPS (herramienta de pruebas)
+  | "ops.simulate"
   // Envios
   | "shipments.view"
   | "shipments.manage"
@@ -57,6 +62,8 @@ const ALL: Permission[] = [
   "entries.view", "entries.manage", "stock.adjust", "movements.view", "movements.delete",
   "requests.view", "requests.create", "requests.manage", "requests.changeStatus", "requests.delete",
   "picking.view", "picking.manage",
+  "imports.view", "imports.manage",
+  "ops.simulate",
   "shipments.view", "shipments.manage",
   "incidents.view", "incidents.create", "incidents.manage",
   "users.manage", "settings.manage"
@@ -80,6 +87,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "movements.view",
     "requests.view", "requests.create",
     "picking.view",
+    "imports.view",
     "shipments.view",
     "incidents.view", "incidents.create"
   ],
@@ -91,6 +99,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "entries.view", "entries.manage", "stock.adjust", "movements.view",
     "requests.view", "requests.create", "requests.changeStatus",
     "picking.view", "picking.manage",
+    "imports.view", "imports.manage",
     "shipments.view", "shipments.manage",
     "incidents.view", "incidents.create", "incidents.manage"
   ]

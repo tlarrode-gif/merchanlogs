@@ -3,10 +3,12 @@
  * futura integracion con transportistas (ej. Nacex), no conectada en esta fase.
  */
 
-import { LogisticsRequest, Shipment } from "@/types";
+import { LogisticsRequest, PickingBatch, Shipment } from "@/types";
 import { makeCrud, NewEntity } from "@/services/crud";
 import { changeRequestStatus } from "@/services/requests.service";
+import { getAdapter } from "@/services/adapter";
 import { nextCode } from "@/lib/ids";
+import { nowIso } from "@/lib/dates";
 import { validate, required } from "@/lib/validation";
 
 const crud = makeCrud("shipments", "shp");
@@ -58,6 +60,50 @@ export async function createShipmentFromRequest(
 
   if (request.status === "lista_para_envio") {
     await changeRequestStatus(request.id, "enviada", `Envio ${shipmentCode} generado`, actorId);
+  }
+  return shipment;
+}
+
+/**
+ * Crea un envio a partir de un PickingBatch cerrado (listo_para_envio) y marca
+ * el batch y sus piezas preparadas como enviados.
+ */
+export async function createShipmentFromPicking(
+  batch: PickingBatch,
+  data: Partial<NewEntity<Shipment>>,
+  actorId?: string | null
+): Promise<Shipment> {
+  const shipmentCode = await nextShipmentCode();
+  const shipment = await crud.create(
+    {
+      shipmentCode,
+      logisticsRequestId: batch.logisticsRequestId ?? null,
+      clientId: batch.clientId,
+      campaignId: batch.campaignId ?? null,
+      carrier: data.carrier ?? null,
+      trackingNumber: data.trackingNumber ?? null,
+      shippingDate: data.shippingDate ?? null,
+      estimatedDeliveryDate: data.estimatedDeliveryDate ?? null,
+      deliveryDate: data.deliveryDate ?? null,
+      status: data.status ?? "preparado",
+      destination: data.destination ?? batch.assignedInstaller ?? null,
+      notes: data.notes ?? `Envio del picking ${batch.pickingCode}`
+    },
+    actorId
+  );
+
+  const adapter = getAdapter();
+  await adapter.update("pickingBatches", batch.id, { status: "enviado", updatedAt: nowIso(), updatedBy: actorId ?? null });
+  // Marcar piezas preparadas como enviadas y enlazarlas al envio.
+  for (const line of batch.lines) {
+    if (line.materialItemId && line.status === "preparado") {
+      await adapter.update("materialItems", line.materialItemId, {
+        status: "enviado",
+        shipmentId: shipment.id,
+        updatedAt: nowIso(),
+        updatedBy: actorId ?? null
+      });
+    }
   }
   return shipment;
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Material, MaterialType, MaterialStatus } from "@/types";
 import { materialsService } from "@/services/catalog.service";
-import { applyStockDelta } from "@/services/stock.service";
+import { applyStockDelta, availableStock } from "@/services/stock.service";
 import { useSession } from "@/components/session-provider";
 import { useData } from "@/components/use-data";
 import { useCatalog } from "@/components/use-catalog";
@@ -53,6 +53,7 @@ export default function MaterialesPage() {
       widthCm: form.widthCm != null ? Number(form.widthCm) : null,
       unit: form.unit ?? "ud",
       currentStock: Number(form.currentStock ?? 0),
+      reservedStock: Number(form.reservedStock ?? 0),
       minimumStock: Number(form.minimumStock ?? 0),
       location: form.location ?? null,
       status: (form.status as MaterialStatus) ?? "activo"
@@ -100,9 +101,10 @@ export default function MaterialesPage() {
       {!materials?.length ? (
         <EmptyState message="No hay materiales." />
       ) : (
-        <Table headers={["Material", "Cliente", "Tipo", "Medidas", "Stock", "Estado", ""]}>
+        <Table headers={["Material", "Cliente", "Tipo", "Medidas", "Stock (fisico / reservado / disp.)", "Estado", ""]}>
           {materials.map((m) => {
-            const low = m.currentStock <= m.minimumStock;
+            const avail = availableStock(m);
+            const low = avail <= m.minimumStock;
             return (
               <tr key={m.id} className={low ? "bg-red-50/40" : ""}>
                 <Td className="font-medium">
@@ -113,8 +115,10 @@ export default function MaterialesPage() {
                 <Td className="capitalize">{m.type}</Td>
                 <Td className="text-xs text-gray-500">{m.dimensions || (m.widthCm && m.heightCm ? `${m.widthCm}x${m.heightCm} cm` : "-")}</Td>
                 <Td>
-                  <span className={low ? "font-semibold text-red-600" : ""}>{m.currentStock}</span>
-                  <span className="text-xs text-gray-400"> / min {m.minimumStock} {m.unit}</span>
+                  <span className="font-medium">{m.currentStock}</span>
+                  <span className="text-xs text-blue-600"> / {m.reservedStock ?? 0} res</span>
+                  <span className={low ? "font-semibold text-red-600" : "text-green-700"}> / {avail} disp</span>
+                  <span className="text-xs text-gray-400"> (min {m.minimumStock})</span>
                 </Td>
                 <Td><Badge tone={materialStatusMeta[m.status].tone}>{materialStatusMeta[m.status].label}</Badge></Td>
                 <Td>

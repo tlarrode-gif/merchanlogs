@@ -6,10 +6,16 @@
 
 import {
   CampaignStatus,
+  GroupingType,
+  ImportBatchStatus,
+  ImportType,
   IncidentSeverity,
   IncidentStatus,
   LogisticsRequestStatus,
+  MaterialItemStatus,
   MaterialStatus,
+  PickingBatchStatus,
+  PickingLineStatus,
   Priority,
   ServiceLogisticsStatus,
   ShipmentStatus,
@@ -162,9 +168,11 @@ export const movementTypeMeta: Record<StockMovementType, { label: string; tone: 
   salida: { label: "Salida", tone: "red", sign: -1 },
   ajuste: { label: "Ajuste", tone: "amber", sign: 0 },
   reserva: { label: "Reserva", tone: "blue", sign: 0 },
+  liberacion_reserva: { label: "Liberacion reserva", tone: "blue", sign: 0 },
   devolucion: { label: "Devolucion", tone: "green", sign: 1 },
   incidencia: { label: "Incidencia", tone: "red", sign: 0 },
   preparacion: { label: "Preparacion", tone: "purple", sign: 0 },
+  salida_picking: { label: "Salida picking", tone: "red", sign: -1 },
   envio: { label: "Envio", tone: "purple", sign: -1 }
 };
 
@@ -177,3 +185,93 @@ export function canTransition<T extends string>(
   if (from === to) return true;
   return meta[from]?.next.includes(to) ?? false;
 }
+
+// ---------------------------------------------------------------------------
+// Picking agrupado (PickingBatch)
+// ---------------------------------------------------------------------------
+
+export const pickingBatchStatusMeta: Record<PickingBatchStatus, StatusMeta<PickingBatchStatus>> = {
+  borrador: { label: "Borrador", tone: "gray", next: ["pendiente_preparacion", "cancelado"] },
+  pendiente_preparacion: { label: "Pendiente preparacion", tone: "blue", next: ["en_preparacion", "bloqueado", "cancelado"] },
+  en_preparacion: { label: "En preparacion", tone: "amber", next: ["preparado_parcial", "preparado_completo", "con_incidencia", "bloqueado"] },
+  preparado_parcial: { label: "Preparado parcial", tone: "amber", next: ["preparado_completo", "con_incidencia", "cerrado", "listo_para_envio"] },
+  preparado_completo: { label: "Preparado completo", tone: "purple", next: ["listo_para_envio", "cerrado", "con_incidencia"] },
+  bloqueado: { label: "Bloqueado", tone: "red", next: ["en_preparacion", "cancelado"] },
+  con_incidencia: { label: "Con incidencia", tone: "red", next: ["en_preparacion", "preparado_parcial", "cerrado", "cancelado"] },
+  listo_para_envio: { label: "Listo para envio", tone: "purple", next: ["enviado", "cerrado"] },
+  enviado: { label: "Enviado", tone: "green", next: ["cerrado"] },
+  cerrado: { label: "Cerrado", tone: "green", next: [] },
+  cancelado: { label: "Cancelado", tone: "gray", next: [] }
+};
+
+/** Estados de picking que el almacen debe ver en la cola de preparacion. */
+export const activePickingStatuses: PickingBatchStatus[] = [
+  "borrador",
+  "pendiente_preparacion",
+  "en_preparacion",
+  "preparado_parcial",
+  "preparado_completo",
+  "bloqueado",
+  "con_incidencia",
+  "listo_para_envio"
+];
+
+/** Estados en los que el picking ya ha descontado stock (cerrado/enviado). */
+export const closedPickingStatuses: PickingBatchStatus[] = ["cerrado", "enviado"];
+
+export const pickingLineStatusMeta: Record<PickingLineStatus, { label: string; tone: Tone }> = {
+  pendiente: { label: "Pendiente", tone: "gray" },
+  preparado: { label: "Preparado", tone: "green" },
+  parcial: { label: "Parcial", tone: "amber" },
+  faltante: { label: "Faltante", tone: "red" },
+  incidencia: { label: "Incidencia", tone: "red" },
+  cancelada: { label: "Cancelada", tone: "gray" }
+};
+
+export const groupingTypeMeta: Record<GroupingType, string> = {
+  por_instalador: "Por instalador",
+  por_punto_venta: "Por punto de venta",
+  por_oficina: "Por oficina",
+  por_provincia: "Por provincia",
+  por_ruta: "Por ruta",
+  por_tipo_material: "Por tipo de material",
+  por_campana: "Por campana",
+  manual: "Manual"
+};
+
+// ---------------------------------------------------------------------------
+// Material items (piezas unitarias)
+// ---------------------------------------------------------------------------
+
+export const materialItemStatusMeta: Record<MaterialItemStatus, { label: string; tone: Tone }> = {
+  pendiente_produccion: { label: "Pendiente produccion", tone: "amber" },
+  pendiente_recepcion: { label: "Pendiente recepcion", tone: "amber" },
+  recibido: { label: "Recibido", tone: "green" },
+  reservado: { label: "Reservado", tone: "blue" },
+  preparado: { label: "Preparado", tone: "purple" },
+  enviado: { label: "Enviado", tone: "purple" },
+  instalado: { label: "Instalado", tone: "green" },
+  incidencia: { label: "Incidencia", tone: "red" },
+  duplicado: { label: "Duplicado", tone: "red" }
+};
+
+/** Estados en los que una pieza cuenta como stock disponible en almacen. */
+export const availableItemStatuses: MaterialItemStatus[] = ["recibido"];
+
+// ---------------------------------------------------------------------------
+// Importaciones
+// ---------------------------------------------------------------------------
+
+export const importTypeMeta: Record<ImportType, string> = {
+  isdin_vinilos: "ISDIN / Vinilos a medida",
+  banc_sabadell: "Banc Sabadell / Visuales por oficina",
+  generico: "Material generico de campana"
+};
+
+export const importBatchStatusMeta: Record<ImportBatchStatus, { label: string; tone: Tone }> = {
+  borrador: { label: "Borrador", tone: "gray" },
+  validado: { label: "Validado", tone: "blue" },
+  confirmado: { label: "Confirmado", tone: "green" },
+  con_errores: { label: "Con errores", tone: "red" },
+  cancelado: { label: "Cancelado", tone: "gray" }
+};

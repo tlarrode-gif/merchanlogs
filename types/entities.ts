@@ -9,12 +9,18 @@
 import { BaseEntity, ISODateString } from "@/types/base";
 import {
   CampaignStatus,
+  GroupingType,
+  ImportBatchStatus,
+  ImportType,
   IncidentSeverity,
   IncidentStatus,
   IncidentType,
   LogisticsRequestStatus,
+  MaterialItemStatus,
   MaterialStatus,
   MaterialType,
+  PickingBatchStatus,
+  PickingLineStatus,
   PointOfSaleType,
   Priority,
   RelatedEntityType,
@@ -113,10 +119,59 @@ export interface Material extends BaseEntity {
   /** Ancho en cm (uso ISDIN/vinilos a medida). */
   widthCm?: number | null;
   unit: string;
+  /** Stock fisico total en almacen (solo se descuenta al cerrar picking). */
   currentStock: number;
+  /** Stock comprometido por pickings abiertos (reservado, aun no descontado). */
+  reservedStock: number;
   minimumStock: number;
   location?: string | null;
   status: MaterialStatus;
+  /**
+   * Si es true, el material se gestiona como piezas unitarias (MaterialItem),
+   * ej. vinilos VIN de ISDIN. El stock agregado se deriva del numero de piezas.
+   */
+  isUnitary?: boolean;
+}
+
+/**
+ * Pieza unitaria e individual de material (ej. vinilo VIN-XXXXX de ISDIN).
+ * Cada pieza es unica: su `itemCode` no debe duplicarse.
+ */
+export interface MaterialItem extends BaseEntity {
+  /** Codigo unico de la pieza (ej. VIN-31195). */
+  itemCode: string;
+  clientId: string;
+  campaignId?: string | null;
+  /** Material agregado al que pertenece (opcional, para tipologia). */
+  materialId?: string | null;
+  name?: string | null;
+  type: MaterialType;
+  heightCm?: number | null;
+  widthCm?: number | null;
+  /** Punto de venta / farmacia / oficina destino. */
+  pointOfSaleName?: string | null;
+  officeCode?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  /** Semana de instalacion (ISDIN). */
+  week?: string | null;
+  installer?: string | null;
+  route?: string | null;
+  wave?: string | null;
+  serviceId?: string | null;
+  serviceCode?: string | null;
+  location?: string | null;
+  status: MaterialItemStatus;
+  notes?: string | null;
+  // Trazabilidad de flujo
+  stockEntryId?: string | null;
+  importBatchId?: string | null;
+  pickingBatchId?: string | null;
+  pickingLineId?: string | null;
+  shipmentId?: string | null;
+  incidentId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,13 +278,100 @@ export interface Incident extends BaseEntity {
   serviceId?: string | null;
   pointOfSaleName?: string | null;
   materialId?: string | null;
+  materialItemId?: string | null;
   shipmentId?: string | null;
   logisticsRequestId?: string | null;
   stockEntryId?: string | null;
+  pickingBatchId?: string | null;
+  pickingLineId?: string | null;
+  importBatchId?: string | null;
   type: IncidentType;
   severity: IncidentSeverity;
   status: IncidentStatus;
   assignedTo?: string | null;
   resolvedAt?: ISODateString | null;
   resolutionNotes?: string | null;
+  /** Si true, bloquea el cierre del picking asociado. */
+  blocksPicking?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Importaciones / carga masiva
+// ---------------------------------------------------------------------------
+
+/** Una fila importada, conservada para trazabilidad del detalle. */
+export interface ImportRow {
+  rowIndex: number;
+  /** Datos crudos por columna (clave = nombre de columna de la plantilla). */
+  raw: Record<string, string>;
+  valid: boolean;
+  duplicate: boolean;
+  errors: string[];
+  /** Id de la entidad creada al confirmar (material item o material). */
+  createdEntityId?: string | null;
+}
+
+export interface ImportBatch extends BaseEntity {
+  importCode: string;
+  type: ImportType;
+  clientId: string;
+  campaignId?: string | null;
+  status: ImportBatchStatus;
+  rowCount: number;
+  validCount: number;
+  duplicateCount: number;
+  errorCount: number;
+  rows: ImportRow[];
+  notes?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Picking agrupado (PickingBatch + lineas)
+// ---------------------------------------------------------------------------
+
+/** Linea de picking: un material/pieza para un destino concreto. */
+export interface PickingLine {
+  id: string;
+  /** Material agregado (para cantidades) o null si es pieza unitaria. */
+  materialId?: string | null;
+  /** Pieza unitaria (ej. vinilo VIN) o null si es material agregado. */
+  materialItemId?: string | null;
+  description: string;
+  quantity: number;
+  preparedQuantity: number;
+  status: PickingLineStatus;
+  // Destino / agrupacion
+  pointOfSaleName?: string | null;
+  officeName?: string | null;
+  officeCode?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  installer?: string | null;
+  route?: string | null;
+  materialType?: MaterialType | null;
+  dimensions?: string | null;
+  location?: string | null;
+  serviceCode?: string | null;
+  incidentId?: string | null;
+  notes?: string | null;
+}
+
+export interface PickingBatch extends BaseEntity {
+  pickingCode: string;
+  clientId: string;
+  campaignId?: string | null;
+  logisticsRequestId?: string | null;
+  importBatchId?: string | null;
+  groupingType: GroupingType;
+  assignedInstaller?: string | null;
+  province?: string | null;
+  route?: string | null;
+  wave?: string | null;
+  status: PickingBatchStatus;
+  priority: Priority;
+  assignedTo?: string | null;
+  closedAt?: ISODateString | null;
+  notes?: string | null;
+  lines: PickingLine[];
 }

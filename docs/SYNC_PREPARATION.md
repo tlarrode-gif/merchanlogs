@@ -127,3 +127,23 @@ usando `clientId`, `ceco`, `campaignId`, `campaignName`, `serviceId`,
 - No hay autenticacion real.
 - No se intercambia nada con MerchanOPS, MerchanGO ni MerchanVIEW.
 - No hay integracion con transportistas (Nacex u otros).
+
+---
+
+## Actualizacion fase 2: nuevas entidades y su sincronizacion
+
+Nuevas colecciones (mapeo 1:1 a tablas Supabase), todas con campos de sync:
+
+| Entidad | Direccion prevista | Notas |
+|---------|--------------------|-------|
+| `materialItems` (piezas VIN) | Local (LOGS), origen import/MerchanOPS | `itemCode` unico; clave de deduplicacion. |
+| `pickingBatches` | Local (LOGS) → OPS (estado) | Se expone estado/cierre a OPS. |
+| `importBatches` | Local (LOGS) | Documento de importacion; trazabilidad. |
+
+- Las incidencias añaden `pickingBatchId`, `pickingLineId`, `materialItemId`,
+  `importBatchId` y `blocksPicking` (todos preparados para sincronizar).
+- La solicitud OPS simulada ya fija `sourceSystem="merchanops"`,
+  `merchanOpsId`, `externalId`, `syncStatus="pending"` — exactamente el contrato
+  que usaria una peticion real entrante.
+- El cierre de picking y la creacion de envio son los puntos donde LOGS
+  **devolveria** el estado logistico a OPS (marcando `syncStatus="pending"`).

@@ -13,7 +13,7 @@ import { CollectionName, CollectionTypeMap, DataStore } from "@/types";
 import { seedDataStore } from "@/data";
 import { DataAdapter } from "@/services/adapter";
 
-const STORAGE_KEY = "merchanlogs_store_v1";
+const STORAGE_KEY = "merchanlogs_store_v2";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

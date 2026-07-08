@@ -56,3 +56,21 @@ Notas de diseno, segun el brief:
   resolverse contra el maestro de usuarios comun.
 - Sustituir `services/session.ts` por la sesion real de Supabase Auth no requiere
   cambios en `permissions.ts` ni en la UI.
+
+---
+
+## Actualizacion fase 2: nuevos permisos
+
+| Accion | Administracion | Gestor | Almacen |
+|--------|:---:|:---:|:---:|
+| Ver carga masiva / importaciones (`imports.view`) | ✅ | ✅ | ✅ |
+| Confirmar importaciones (`imports.manage`) | ✅ | ❌ | ✅ |
+| Simular solicitud desde OPS (`ops.simulate`) | ✅ | ❌ | ❌ |
+| Ver piezas unitarias (VIN) | ✅ | ✅ | ✅ |
+| Crear/gestionar picking agrupado (`picking.manage`) | ✅ | 👁️ ver | ✅ |
+| Cerrar picking (descuenta stock) | ✅ | ❌ | ✅ |
+
+El picking agrupado, el cierre (con descuento de stock) y la confirmacion de
+importaciones son operaciones de **almacen** (y administracion). El gestor solo
+consulta. La simulacion OPS es una herramienta de pruebas restringida a
+administracion en esta fase.

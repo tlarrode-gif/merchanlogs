@@ -6,9 +6,12 @@ export * from "@/types/entities";
 import {
   Campaign,
   Client,
+  ImportBatch,
   Incident,
   LogisticsRequest,
   Material,
+  MaterialItem,
+  PickingBatch,
   RequestHistoryEntry,
   Service,
   Shipment,
@@ -27,10 +30,13 @@ export type CollectionName =
   | "campaigns"
   | "services"
   | "materials"
+  | "materialItems"
   | "stockEntries"
   | "stockMovements"
   | "logisticsRequests"
   | "requestHistory"
+  | "pickingBatches"
+  | "importBatches"
   | "shipments"
   | "incidents";
 
@@ -41,10 +47,13 @@ export interface CollectionTypeMap {
   campaigns: Campaign;
   services: Service;
   materials: Material;
+  materialItems: MaterialItem;
   stockEntries: StockEntry;
   stockMovements: StockMovement;
   logisticsRequests: LogisticsRequest;
   requestHistory: RequestHistoryEntry;
+  pickingBatches: PickingBatch;
+  importBatches: ImportBatch;
   shipments: Shipment;
   incidents: Incident;
 }

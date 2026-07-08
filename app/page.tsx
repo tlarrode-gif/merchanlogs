@@ -26,6 +26,8 @@ export default function DashboardPage() {
         <StatCard label="En preparacion" value={metrics.requestsPreparing} tone="purple" />
         <StatCard label="Enviadas" value={metrics.requestsShipped} tone="green" />
         <StatCard label="Incidencias abiertas" value={metrics.incidentsOpen} tone="red" />
+        <StatCard label="Picking activo" value={metrics.pickingActive} tone="purple" />
+        <StatCard label="Piezas en stock" value={metrics.itemsInStock} tone="blue" />
         <StatCard label="Material pdte. entrada" value={metrics.materialPendingEntry} tone="amber" />
         <StatCard label="Material bajo stock" value={metrics.materialBelowStock} tone="red" />
       </div>

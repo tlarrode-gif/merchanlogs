@@ -6,6 +6,7 @@ import { listIncidents, createIncident, updateIncident, removeIncident, changeIn
 import { listRequests } from "@/services/requests.service";
 import { listShipments } from "@/services/shipments.service";
 import { listEntries } from "@/services/entries.service";
+import { listPickingBatches } from "@/services/picking.service";
 import { useSession } from "@/components/session-provider";
 import { useData } from "@/components/use-data";
 import { useCatalog } from "@/components/use-catalog";
@@ -24,6 +25,7 @@ export default function IncidenciasPage() {
   const { data: requests } = useData(() => listRequests(), []);
   const { data: shipments } = useData(() => listShipments(), []);
   const { data: entries } = useData(() => listEntries(), []);
+  const { data: pickingBatches } = useData(() => listPickingBatches(), []);
   const { catalog } = useCatalog();
 
   const [open, setOpen] = useState(false);
@@ -57,9 +59,14 @@ export default function IncidenciasPage() {
       serviceId: form.serviceId ?? null,
       pointOfSaleName: form.pointOfSaleName ?? null,
       materialId: form.materialId ?? null,
+      materialItemId: form.materialItemId ?? null,
       shipmentId: form.shipmentId ?? null,
       logisticsRequestId: form.logisticsRequestId ?? null,
       stockEntryId: form.stockEntryId ?? null,
+      pickingBatchId: form.pickingBatchId ?? null,
+      pickingLineId: form.pickingLineId ?? null,
+      importBatchId: form.importBatchId ?? null,
+      blocksPicking: form.blocksPicking ?? false,
       type: (form.type as IncidentType) ?? "otra",
       severity: (form.severity as IncidentSeverity) ?? "media",
       status: (form.status as IncidentStatus) ?? "abierta",
@@ -190,6 +197,18 @@ export default function IncidenciasPage() {
               {(entries ?? []).map((en) => <option key={en.id} value={en.id}>{en.id} — {catalog.materialName(en.materialId)}</option>)}
             </Select>
           </Field>
+          <Field label="Picking">
+            <Select value={form.pickingBatchId ?? ""} onChange={(e) => setForm({ ...form, pickingBatchId: e.target.value || null })}>
+              <option value="">(sin picking)</option>
+              {(pickingBatches ?? []).map((p) => <option key={p.id} value={p.id}>{p.pickingCode}</option>)}
+            </Select>
+          </Field>
+          <div className="flex items-center">
+            <label className="mt-5 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.blocksPicking ?? false} onChange={(e) => setForm({ ...form, blocksPicking: e.target.checked })} />
+              Bloquea el cierre del picking
+            </label>
+          </div>
           <div className="md:col-span-2">
             <Field label="Descripcion"><Textarea rows={3} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           </div>

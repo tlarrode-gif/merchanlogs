@@ -38,9 +38,9 @@ export const clients: Client[] = [
   },
   {
     id: "cli_sabadell",
-    name: "Banco Sabadell",
+    name: "Banc Sabadell",
     ceco: "CECO-SABADELL-01",
-    description: "Banca. Cambio visual de oficinas.",
+    description: "Banca. Cambio visual de oficinas (visuales por oficina, picking por instalador).",
     active: true,
     ...seedBase()
   },

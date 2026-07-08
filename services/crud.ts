@@ -15,7 +15,7 @@ import { nowIso } from "@/lib/dates";
 export type NewEntity<T extends BaseEntity> = Omit<
   T,
   keyof BaseEntity
-> & Partial<Pick<T, "externalId" | "merchanOpsId" | "sourceSystem">>;
+> & Partial<Pick<T, "externalId" | "merchanOpsId" | "sourceSystem" | "syncStatus">>;
 
 export function makeCrud<K extends CollectionName>(collection: K, idPrefix: string) {
   type T = CollectionTypeMap[K];
@@ -41,6 +41,7 @@ export function makeCrud<K extends CollectionName>(collection: K, idPrefix: stri
         externalId: (input as Partial<BaseEntity>).externalId ?? sync.externalId,
         merchanOpsId: (input as Partial<BaseEntity>).merchanOpsId ?? sync.merchanOpsId,
         sourceSystem: (input as Partial<BaseEntity>).sourceSystem ?? sync.sourceSystem,
+        syncStatus: (input as Partial<BaseEntity>).syncStatus ?? sync.syncStatus,
         id: uid(idPrefix)
       } as T;
       return getAdapter().insert(collection, entity);

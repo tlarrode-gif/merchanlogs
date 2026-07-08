@@ -24,10 +24,13 @@ const navItems: NavItem[] = [
   { href: "/campanas", label: "Campanas", permission: "campaigns.view" },
   { href: "/servicios", label: "Servicios", permission: "services.view" },
   { href: "/materiales", label: "Materiales", permission: "materials.view" },
+  { href: "/piezas", label: "Piezas (VIN)", permission: "materials.view" },
+  { href: "/importaciones", label: "Carga masiva", permission: "imports.view" },
   { href: "/entradas", label: "Entradas", permission: "entries.view" },
   { href: "/movimientos", label: "Movimientos", permission: "movements.view" },
   { href: "/peticiones", label: "Peticiones", permission: "requests.view" },
-  { href: "/picking", label: "Picking / Preparacion", permission: "picking.view" },
+  { href: "/solicitudes-ops", label: "Solicitudes OPS", permission: "ops.simulate" },
+  { href: "/picking", label: "Picking agrupado", permission: "picking.view" },
   { href: "/envios", label: "Envios", permission: "shipments.view" },
   { href: "/incidencias", label: "Incidencias", permission: "incidents.view" }
 ];

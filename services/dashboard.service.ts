@@ -6,7 +6,7 @@
 import { Incident, Material, StockMovement } from "@/types";
 import { getAdapter } from "@/services/adapter";
 import { isBelowMinimum } from "@/services/stock.service";
-import { openIncidentStatuses } from "@/lib/status";
+import { activePickingStatuses, openIncidentStatuses } from "@/lib/status";
 
 export interface DashboardMetrics {
   requestsTotal: number;
@@ -16,17 +16,21 @@ export interface DashboardMetrics {
   incidentsOpen: number;
   materialPendingEntry: number;
   materialBelowStock: number;
+  pickingActive: number;
+  itemsInStock: number;
   lastMovements: StockMovement[];
   lastIncidents: Incident[];
 }
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const adapter = getAdapter();
-  const [requests, incidents, materials, movements] = await Promise.all([
+  const [requests, incidents, materials, movements, pickingBatches, items] = await Promise.all([
     adapter.list("logisticsRequests"),
     adapter.list("incidents"),
     adapter.list("materials"),
-    adapter.list("stockMovements")
+    adapter.list("stockMovements"),
+    adapter.list("pickingBatches"),
+    adapter.list("materialItems")
   ]);
 
   const pendingStatuses = ["borrador", "solicitada", "en_revision"];
@@ -50,6 +54,8 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       ["pendiente_produccion", "pendiente_recepcion"].includes(m.status)
     ).length,
     materialBelowStock: materials.filter((m: Material) => isBelowMinimum(m)).length,
+    pickingActive: pickingBatches.filter((p) => activePickingStatuses.includes(p.status)).length,
+    itemsInStock: items.filter((it) => it.status === "recibido").length,
     lastMovements,
     lastIncidents
   };

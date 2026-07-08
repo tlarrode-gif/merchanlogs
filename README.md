@@ -54,13 +54,23 @@ No requiere variables de entorno en esta fase (usa datos locales). El fichero
 | Clientes / CECOs | `/clientes` | Alta y gestion de clientes y centros de coste |
 | Campanas | `/campanas` | Campanas vinculadas a cliente/CECO |
 | Servicios | `/servicios` | Servicios logisticos (PDV, provincia, materiales, semana ISDIN) |
-| Materiales | `/materiales` | Inventario, stock, minimos, ajuste manual con trazabilidad |
+| Materiales | `/materiales` | Inventario agregado, stock fisico / reservado / disponible, ajuste con trazabilidad |
+| Piezas (VIN) | `/piezas` | Piezas unitarias individuales (ej. vinilos VIN de ISDIN), codigo unico |
+| Carga masiva | `/importaciones` | Importacion copiar/pegar desde Excel (ISDIN, Banc Sabadell, generico) |
 | Entradas | `/entradas` | Recepcion de material (actualiza stock al recibir) |
 | Movimientos | `/movimientos` | Historico automatico de movimientos de stock |
 | Peticiones | `/peticiones` | Modulo central de peticiones + historico de estados |
-| Picking | `/picking` | Preparacion, deteccion de falta de stock, cambio de estado |
+| Solicitudes OPS | `/solicitudes-ops` | Simulacion local de peticiones entrantes de MerchanOPS |
+| Picking agrupado | `/picking` | PickingBatch por instalador/oficina/ruta; cierre descuenta stock; hoja imprimible |
 | Envios | `/envios` | Registro de envios (tracking preparado para transportista futuro) |
-| Incidencias | `/incidencias` | Incidencias vinculables a cualquier entidad logistica |
+| Incidencias | `/incidencias` | Incidencias vinculables a cualquier entidad (incluye picking) y bloqueo de cierre |
+
+### Regla de stock (fase 2)
+
+El stock fisico (`currentStock`) **solo se descuenta al cerrar el picking**
+(movimiento `salida_picking`). Crear un picking **reserva** (`reservedStock`), y
+preparar lineas **no** descuenta stock. Disponible = fisico − reservado.
+Ver `docs/PICKING_BATCHES.md` y `docs/AUDIT_REPORT.md`.
 
 ## Estado actual
 
@@ -92,6 +102,11 @@ ni la UI ni la logica de dominio.
 ## Documentacion
 
 - `docs/PROJECT_STATUS.md` — que se ha construido, que funciona, que queda pendiente.
+- `docs/AUDIT_REPORT.md` — auditoria funcional (fase 2): hallazgos y correcciones.
+- `docs/BULK_IMPORTS.md` — carga masiva copiar/pegar (plantillas ISDIN y Banc Sabadell).
+- `docs/PICKING_BATCHES.md` — picking agrupado, criterios, cierre y regla de stock.
+- `docs/PICKING_PRINT_SHEETS.md` — hojas de picking imprimibles.
+- `docs/OPS_REQUEST_FLOW.md` — simulacion de solicitud desde MerchanOPS.
 - `docs/SYNC_PREPARATION.md` — preparacion de la sincronizacion con MerchanOPS/Supabase.
 - `docs/DATA_MODEL.md` — modelo de datos y relaciones.
 - `docs/SUPABASE_SCHEMA_DRAFT.md` — borrador de esquema SQL (sin activar).

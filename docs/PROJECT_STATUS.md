@@ -96,3 +96,37 @@ Reglas de dominio implementadas:
 4. Implementar los flujos de entrada/salida con MerchanOPS descritos en
    `docs/SYNC_PREPARATION.md`.
 5. Anadir tests automatizados sobre la capa de servicios (logica de stock/estados).
+
+---
+
+## Fase 2 — Auditoria y mejora operativa (actualizacion)
+
+### Construido en fase 2
+
+- **Regla de stock corregida**: el stock fisico se descuenta **solo al cerrar el
+  picking** (`salida_picking`). Nuevo `reservedStock` y `availableStock`.
+- **`MaterialItem`**: piezas unitarias con `itemCode` unico (vinilos VIN de ISDIN)
+  y deteccion de duplicados.
+- **Carga masiva** (`/importaciones`): copiar/pegar desde Excel con
+  previsualizacion, validacion y duplicados (ISDIN, Banc Sabadell, generico).
+- **`PickingBatch`** (`/picking`): picking agrupado por instalador/oficina/
+  provincia/ruta/tipo. Detalle, preparacion, incidencias, cierre y **hoja
+  imprimible** (`/picking/[id]/print`).
+- **Incidencias** enlazadas a picking/pieza/import y con `blocksPicking`.
+- **Simulacion de solicitud OPS** (`/solicitudes-ops`) con campos de sync.
+- **Envio desde picking** (`createShipmentFromPicking`).
+
+### Verificado end-to-end (navegador headless)
+
+- Import ISDIN con `VIN` duplicado: se detecta y **no** se duplica la pieza.
+- Regla de stock: crear picking no descuenta (reserva), preparar no descuenta,
+  **cerrar descuenta** solo lo preparado (cierre parcial correcto).
+- Banc Sabadell: picking agrupado **por instalador** con las piezas del instalador.
+- `lint`, `tsc --noEmit` y `build` en verde (17 rutas).
+
+### Pendiente (siguientes fases)
+
+- Import desde ficheros `.xlsx`/`.csv` (hoy solo copiar/pegar TSV).
+- Conexion real Supabase/MerchanOPS y auth compartida.
+- Avisos por email en el flujo OPS (estructura preparada, sin enviar).
+- Suite de tests automatizada (hoy verificacion por script E2E de humo).

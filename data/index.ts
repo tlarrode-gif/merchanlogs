@@ -17,6 +17,8 @@ import {
   stockEntries,
   stockMovements
 } from "@/data/operations";
+import { materialItems } from "@/data/material-items";
+import { importBatches, pickingBatches } from "@/data/picking";
 
 export function seedDataStore(): DataStore {
   // Copia profunda para que el almacen mutable no altere los arrays semilla.
@@ -27,10 +29,13 @@ export function seedDataStore(): DataStore {
       campaigns,
       services,
       materials,
+      materialItems,
       stockEntries,
       stockMovements,
       logisticsRequests,
       requestHistory,
+      pickingBatches,
+      importBatches,
       shipments,
       incidents
     } satisfies DataStore)
