@@ -10,6 +10,7 @@ import { BaseEntity, CollectionName, CollectionTypeMap, defaultSyncFields } from
 import { getAdapter } from "@/services/adapter";
 import { uid } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
+import { sanitizeDeep } from "@/lib/sanitize";
 
 /** Campos que el llamante NO debe aportar (los gestiona la capa CRUD). */
 export type NewEntity<T extends BaseEntity> = Omit<
@@ -35,7 +36,8 @@ export function makeCrud<K extends CollectionName>(collection: K, idPrefix: stri
       const now = nowIso();
       const sync = defaultSyncFields(now, actorId);
       const entity = {
-        ...(input as object),
+        // Todo lo que entra por la capa CRUD se sanitiza (strings en profundidad).
+        ...(sanitizeDeep(input) as object),
         ...sync,
         // Permitir sobreescribir procedencia si el registro viene de fuera.
         externalId: (input as Partial<BaseEntity>).externalId ?? sync.externalId,
@@ -49,7 +51,7 @@ export function makeCrud<K extends CollectionName>(collection: K, idPrefix: stri
 
     async update(id: string, patch: Partial<T>, actorId?: string | null): Promise<T> {
       const finalPatch = {
-        ...patch,
+        ...(sanitizeDeep(patch) as object),
         updatedAt: nowIso(),
         updatedBy: actorId ?? null
       } as Partial<T>;
