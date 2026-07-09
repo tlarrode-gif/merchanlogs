@@ -132,6 +132,31 @@ Reglas de dominio implementadas:
 
 ---
 
+## Fase 3a — Conexion Supabase en SOLO LECTURA (nuevo)
+
+Decision confirmada: MerchanLOGS comparte el proyecto Supabase de MerchanOPS y
+sera co-propietario de las tablas `logistics_*` (el backend logistico YA existe
+en produccion; no se crea esquema nuevo). Ver docs/SUPABASE_RECONCILIATION.md.
+
+- **`services/supabase-adapter.ts`**: implementacion de `DataAdapter` con
+  mapeadores por coleccion contra las tablas reales: join materiales+stock,
+  colapso de lineas (peticiones, pickings, entradas), mapeo tolerante de
+  estados ES-DB → dominio, y campos de sync (`merchanOpsId`, `sourceSystem:
+  "merchanops"`, `syncStatus: "synced"`).
+- **Activacion por entorno**: `NEXT_PUBLIC_DATA_SOURCE=supabase` + claves en
+  `.env`. Por defecto la app sigue 100% en datos locales.
+- **Guardas**: escrituras bloqueadas con error explicativo (fase 3a),
+  `reset()` bloqueado SIEMPRE (jamas re-sembrar la base compartida);
+  `requestHistory` e `importBatches` (sin tabla) siguen en local.
+- Tests: 22 en verde (guardas del adapter incluidas). La verificacion de
+  lectura en vivo queda pendiente de un entorno con salida de red a
+  `*.supabase.co` (el sandbox actual la bloquea) o del deploy.
+
+Proximo (fase 3b): escritura entidad a entidad empezando por stock/pickings,
+previa migracion a Supabase Auth + RLS (ver docs/SECURITY_AUDIT.md).
+
+---
+
 ## Fase 3 (en curso) — Endurecimiento de la regla de stock + tests
 
 Auditoria de la capa de dominio y correccion de incoherencias entre la logica y
