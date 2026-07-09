@@ -245,11 +245,25 @@ export interface CoverageLine {
 export async function getStockCoverage(batch: PickingBatch): Promise<CoverageLine[]> {
   const materials = await getAdapter().list("materials");
   const byId = new Map<string, Material>(materials.map((m) => [m.id, m]));
+
+  // Cuanto ha reservado ESTE batch por material (para no contarlo contra si mismo).
+  const ownReservedByMaterial = new Map<string, number>();
+  for (const line of batch.lines) {
+    if (line.materialId) {
+      ownReservedByMaterial.set(
+        line.materialId,
+        (ownReservedByMaterial.get(line.materialId) ?? 0) + line.quantity
+      );
+    }
+  }
+
   return batch.lines.map((line) => {
     if (!line.materialId) return { line, available: 1, covered: true };
     const m = byId.get(line.materialId);
-    // available + lo ya reservado por este batch ya esta contado; usamos fisico.
-    const available = m ? m.currentStock : 0;
+    // Disponible para este batch = fisico - reservado por OTROS batches.
+    // (fisico - reservado total) + lo que este batch ya tiene reservado.
+    const own = ownReservedByMaterial.get(line.materialId) ?? 0;
+    const available = m ? availableStock(m) + own : 0;
     return { line, available, covered: available >= line.quantity };
   });
 }
@@ -301,6 +315,24 @@ export async function flagLine(
   return updateLines(
     batchId,
     (line) => (line.id === lineId ? { ...line, status, incidentId: incidentId ?? line.incidentId ?? null } : line),
+    actorId
+  );
+}
+
+/**
+ * Cancela una linea del picking: no se preparara ni se enviara. No toca el stock
+ * fisico; su reserva se libera al cerrar el batch (la logica de cierre libera la
+ * reserva completa y solo consume lo preparado, que aqui queda a 0). Las piezas
+ * unitarias no preparadas se liberan tambien en el cierre.
+ */
+export async function cancelLine(
+  batchId: string,
+  lineId: string,
+  actorId?: string | null
+): Promise<PickingBatch> {
+  return updateLines(
+    batchId,
+    (line) => (line.id === lineId ? { ...line, status: "cancelada", preparedQuantity: 0 } : line),
     actorId
   );
 }

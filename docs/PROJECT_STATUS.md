@@ -129,4 +129,47 @@ Reglas de dominio implementadas:
 - Import desde ficheros `.xlsx`/`.csv` (hoy solo copiar/pegar TSV).
 - Conexion real Supabase/MerchanOPS y auth compartida.
 - Avisos por email en el flujo OPS (estructura preparada, sin enviar).
-- Suite de tests automatizada (hoy verificacion por script E2E de humo).
+
+---
+
+## Fase 3 (en curso) — Endurecimiento de la regla de stock + tests
+
+Auditoria de la capa de dominio y correccion de incoherencias entre la logica y
+su documentacion, mas la primera suite de tests automatizada.
+
+### Corregido
+
+- **`reserveStock` ahora valida disponible.** Antes solo sumaba a `reservedStock`
+  sin comprobar nada (el docstring decia que bloqueaba, pero no lo hacia): se
+  podia reservar mas que el stock fisico y dejar `availableStock` negativo. Ahora
+  bloquea si la reserva supera `disponible = fisico - reservado`. Como
+  `createPickingFromRequest` reserva al crear, esto impide crear pickings sin
+  material real. (`services/stock.service.ts`)
+- **`getStockCoverage` usa disponible, no fisico puro.** Antes calculaba la
+  cobertura con `currentStock`, ignorando reservas de otros pickings (dos batches
+  se mostraban ambos "cubiertos" sobre el mismo stock). Ahora usa
+  `availableStock` excluyendo la reserva propia del batch para no penalizarse a si
+  mismo. (`services/picking.service.ts`)
+- **Estado de linea `cancelada` operativo.** Existia en el tipo y en
+  `deriveBatchStatus` pero ningun flujo lo asignaba (rama muerta). Se anade
+  `cancelLine()` en el servicio y un boton "Cancelar" en el detalle de picking;
+  la reserva de una linea cancelada se libera al cerrar y no consume stock.
+
+### Tests automatizados (nuevo)
+
+- **Vitest** configurado con el alias `@/*` (`vitest.config.ts`). Los tests corren
+  en Node sobre el `LocalAdapter` en memoria; `reset()` aisla cada caso.
+- `npm test` → **18 tests en verde** cubriendo la regla de stock:
+  - `tests/stock.test.ts`: `availableStock`, `reserveStock` (incluida la nueva
+    validacion de disponible), `releaseReservation`, `applyStockDelta` (sin
+    negativos, estado `agotado`).
+  - `tests/picking.test.ts`: reserva al crear (no descuenta), descuento solo al
+    cerrar, cierre parcial, idempotencia, linea cancelada y cobertura.
+- `lint` y `build` (17 rutas) siguen en verde.
+
+### Pendiente (siguientes fases)
+
+- Import desde ficheros `.xlsx`/`.csv` (hoy solo copiar/pegar TSV).
+- Conexion real Supabase/MerchanOPS y auth compartida.
+- Avisos por email en el flujo OPS (estructura preparada, sin enviar).
+- Ampliar cobertura de tests a entradas, envios, incidencias y maquinas de estado.

@@ -33,6 +33,7 @@ npm run dev      # desarrollo en http://localhost:3000
 npm run build    # build de produccion
 npm run start    # sirve el build
 npm run lint     # ESLint
+npm test         # tests de la capa de servicios (Vitest)
 ```
 
 No requiere variables de entorno en esta fase (usa datos locales). El fichero

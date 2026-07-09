@@ -120,9 +120,9 @@ export async function applyStockDelta(change: StockChange): Promise<{ material: 
 
 /**
  * Reserva stock (compromiso por un picking abierto). NO toca el stock fisico;
- * incrementa `reservedStock` y registra un movimiento `reserva`. Avisa por error
- * si no hay disponible suficiente pero permite reservar en negativo controlado?
- * No: bloquea si supera el disponible para mantener coherencia.
+ * incrementa `reservedStock` y registra un movimiento `reserva`. Bloquea si la
+ * reserva supera el stock disponible (`fisico - reservado`) para mantener la
+ * coherencia de la regla: disponible = fisico - reservado nunca debe ser < 0.
  */
 export async function reserveStock(
   materialId: string,
@@ -134,6 +134,13 @@ export async function reserveStock(
   const adapter = getAdapter();
   const material = await adapter.get("materials", materialId);
   if (!material) throw new Error(`Material ${materialId} no encontrado`);
+
+  const available = availableStock(material);
+  if (quantity > available) {
+    throw new Error(
+      `Stock disponible insuficiente para reservar "${material.name}" (disponible ${available}, solicitado ${quantity})`
+    );
+  }
 
   const updated = await adapter.update("materials", materialId, {
     reservedStock: (material.reservedStock ?? 0) + quantity,

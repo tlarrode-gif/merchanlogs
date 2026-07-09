@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { IncidentSeverity, IncidentType, PickingLine } from "@/types";
 import {
-  getPickingBatch, prepareLine, flagLine, closePickingBatch, changeBatchStatus, summarizeBatch, groupLines, getStockCoverage
+  getPickingBatch, prepareLine, flagLine, cancelLine, closePickingBatch, changeBatchStatus, summarizeBatch, groupLines, getStockCoverage
 } from "@/services/picking.service";
 import { createIncident, nextIncidentCode, listIncidents } from "@/services/incidents.service";
 import { createShipmentFromPicking } from "@/services/shipments.service";
@@ -59,6 +59,12 @@ export default function PickingDetailPage() {
       qty = Number(raw);
     }
     await prepareLine(batch!.id, line.id, qty, user?.id);
+    refreshData();
+  }
+
+  async function cancel(line: PickingLine) {
+    if (!window.confirm(`Cancelar la linea "${line.description}"? No se preparara ni se enviara.`)) return;
+    await cancelLine(batch!.id, line.id, user?.id);
     refreshData();
   }
 
@@ -191,8 +197,9 @@ export default function PickingDetailPage() {
                       <Td>
                         {canManage && !closed ? (
                           <div className="flex gap-1">
-                            {line.status !== "preparado" ? <Button variant="secondary" onClick={() => prepare(line)}>Preparar</Button> : null}
-                            {line.status !== "incidencia" ? <Button variant="ghost" onClick={() => openIncident(line)}>Incidencia</Button> : null}
+                            {line.status !== "preparado" && line.status !== "cancelada" ? <Button variant="secondary" onClick={() => prepare(line)}>Preparar</Button> : null}
+                            {line.status !== "incidencia" && line.status !== "cancelada" ? <Button variant="ghost" onClick={() => openIncident(line)}>Incidencia</Button> : null}
+                            {line.status !== "cancelada" ? <Button variant="ghost" onClick={() => cancel(line)}>Cancelar</Button> : null}
                           </div>
                         ) : line.incidentId ? <span className="text-xs text-red-600">inc.</span> : null}
                       </Td>
