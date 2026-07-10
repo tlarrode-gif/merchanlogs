@@ -11,6 +11,7 @@ import { SessionProvider, useSession } from "@/components/session-provider";
 import { Permission } from "@/lib/permissions";
 import { roleLabels } from "@/lib/permissions";
 import { getAdapter } from "@/services/adapter";
+import { ConnectionBadge } from "@/components/connection-status";
 
 interface NavItem {
   href: string;
@@ -78,9 +79,7 @@ function TopBar() {
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
-      <div className="text-sm text-gray-500">
-        Entorno: <span className="font-medium text-amber-600">Datos locales (sin Supabase)</span>
-      </div>
+      <ConnectionBadge />
       <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           <span className="text-gray-500">Usuario:</span>
