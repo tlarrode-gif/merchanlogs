@@ -1,214 +1,271 @@
 "use client";
 
+/**
+ * Gestion de Picking (rediseño, mockup image5): lista maestro-detalle. A la
+ * izquierda los pickings con filtros; a la derecha el detalle con checklist de
+ * materiales, progreso y acciones (preparar linea, cerrar, enviar a transporte).
+ */
+
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { GroupingType, PickingBatch } from "@/types";
+import { useSearchParams } from "next/navigation";
+import { CheckSquare, ChevronRight, ClipboardList, PackageCheck, Printer, Send, Square, Timer } from "lucide-react";
+import { PickingBatch } from "@/types";
 import {
-  listPickingBatches, createPickingFromItems, createPickingFromRequest, removePickingBatch, summarizeBatch
+  listPickingBatches,
+  prepareLine,
+  cancelLine,
+  closePickingBatch,
+  changeBatchStatus
 } from "@/services/picking.service";
-import { listRequests } from "@/services/requests.service";
-import { listMaterialItems } from "@/services/material-items.service";
-import { listIncidents } from "@/services/incidents.service";
+import { createShipmentFromPicking } from "@/services/shipments.service";
 import { useSession } from "@/components/session-provider";
 import { useData } from "@/components/use-data";
 import { useCatalog } from "@/components/use-catalog";
-import {
-  Badge, Button, EmptyState, ErrorText, Field, Modal, NoAccess, PageHeader, Select, Table, Td
-} from "@/components/ui";
-import { groupingTypeMeta, pickingBatchStatusMeta, priorityMeta } from "@/lib/status";
-import { formatDate } from "@/lib/dates";
+import { useCampaignFilter } from "@/app/app-shell";
+import { Chip, Empty, Kpi, PageHeader, Panel, Progress } from "@/components/lg";
+import { NoAccess } from "@/components/ui";
+import { activePickingStatuses, pickingBatchStatusMeta, pickingLineStatusMeta } from "@/lib/status";
 
-const groupingOptions: GroupingType[] = [
-  "por_instalador", "por_punto_venta", "por_oficina", "por_provincia", "por_ruta", "por_tipo_material", "por_campana", "manual"
-];
-
-export default function PickingListPage() {
+export default function PickingPage() {
   const { can, user, refreshData } = useSession();
+  const { campaignId } = useCampaignFilter();
+  const search = useSearchParams();
   const { data: batches } = useData(() => listPickingBatches(), []);
-  const { data: requests } = useData(() => listRequests(), []);
-  const { data: items } = useData(() => listMaterialItems(), []);
-  const { data: incidents } = useData(() => listIncidents(), []);
   const { catalog } = useCatalog();
 
-  const [open, setOpen] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [source, setSource] = useState<"items" | "request">("items");
-  const [form, setForm] = useState<{
-    clientId: string; campaignId: string; groupingType: GroupingType;
-    installer: string; province: string; route: string; pointOfSaleName: string; materialType: string;
-    requestId: string;
-  }>({ clientId: "", campaignId: "", groupingType: "por_instalador", installer: "", province: "", route: "", pointOfSaleName: "", materialType: "", requestId: "" });
+  const [selectedId, setSelectedId] = useState<string | null>(search.get("id"));
+  const [statusFilter, setStatusFilter] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
-  const clientItems = useMemo(
-    () => (items ?? []).filter((it) => (!form.clientId || it.clientId === form.clientId) && (!form.campaignId || it.campaignId === form.campaignId) && it.status === "recibido" && !it.pickingBatchId),
-    [items, form.clientId, form.campaignId]
-  );
-  const installers = Array.from(new Set(clientItems.map((it) => it.installer).filter(Boolean))) as string[];
-  const provinces = Array.from(new Set(clientItems.map((it) => it.province).filter(Boolean))) as string[];
-  const routes = Array.from(new Set(clientItems.map((it) => it.route).filter(Boolean))) as string[];
-  const pending = (requests ?? []).filter((r) => ["solicitada", "en_revision", "preparando", "pendiente_material"].includes(r.status));
+  const filtered = useMemo(() => {
+    let rows = (batches ?? []).filter((b) => !campaignId || b.campaignId === campaignId);
+    if (statusFilter === "activos") rows = rows.filter((b) => activePickingStatuses.includes(b.status));
+    else if (statusFilter) rows = rows.filter((b) => b.status === statusFilter);
+    return rows.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  }, [batches, campaignId, statusFilter]);
+
+  const selected = filtered.find((b) => b.id === selectedId) ?? filtered[0] ?? null;
 
   if (!can("picking.view")) return <NoAccess />;
   const canManage = can("picking.manage");
 
-  function openModal() {
-    setForm({ clientId: "", campaignId: "", groupingType: "por_instalador", installer: "", province: "", route: "", pointOfSaleName: "", materialType: "", requestId: "" });
-    setErrors([]);
-    setSource("items");
-    setOpen(true);
+  const kpis = {
+    pendiente: (batches ?? []).filter((b) => b.status === "pendiente_preparacion").length,
+    enPrep: (batches ?? []).filter((b) => b.status === "en_preparacion").length,
+    preparados: (batches ?? []).filter((b) => ["preparado_completo", "listo_para_envio"].includes(b.status)).length
+  };
+
+  function flash(text: string) {
+    setNotice(text);
+    setTimeout(() => setNotice(""), 3500);
   }
 
-  async function create() {
+  async function run(action: () => Promise<unknown>, ok: string) {
+    setBusy(true);
     try {
-      if (source === "request") {
-        const req = (requests ?? []).find((r) => r.id === form.requestId);
-        if (!req) return setErrors(["Selecciona una peticion"]);
-        await createPickingFromRequest(req, form.groupingType, user?.id);
-      } else {
-        if (!form.clientId) return setErrors(["Selecciona cliente"]);
-        await createPickingFromItems(
-          {
-            clientId: form.clientId,
-            campaignId: form.campaignId || null,
-            groupingType: form.groupingType,
-            assignedInstaller: form.installer || null,
-            province: form.province || null,
-            route: form.route || null
-          },
-          {
-            installer: form.installer || null,
-            province: form.province || null,
-            route: form.route || null,
-            pointOfSaleName: form.pointOfSaleName || null,
-            materialType: form.materialType || null
-          },
-          user?.id
-        );
-      }
-      setOpen(false);
+      await action();
+      flash(ok);
       refreshData();
     } catch (e) {
-      setErrors([e instanceof Error ? e.message : "Error"]);
+      window.alert(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function remove(b: PickingBatch) {
-    if (b.closedAt) return window.alert("No se puede eliminar un picking ya cerrado.");
-    if (!window.confirm(`Eliminar picking ${b.pickingCode}? Se liberaran sus reservas de forma manual.`)) return;
-    await removePickingBatch(b.id);
-    refreshData();
+  async function toggleLine(batch: PickingBatch, lineId: string, prepared: boolean) {
+    await run(
+      () => prepareLine(batch.id, lineId, prepared ? undefined : 0, user?.id),
+      prepared ? "Línea preparada" : "Línea desmarcada"
+    );
   }
 
+  const progress = (b: PickingBatch) => {
+    const target = b.lines.filter((l) => l.status !== "cancelada");
+    const total = target.reduce((s, l) => s + l.quantity, 0);
+    const done = target.reduce((s, l) => s + Math.min(l.preparedQuantity, l.quantity), 0);
+    return { done: target.filter((l) => l.status === "preparado").length, total: target.length, pct: total ? Math.round((done / total) * 100) : 0 };
+  };
+
+  const selectedProgress = selected ? progress(selected) : null;
+  const canClose = selected && ["en_preparacion", "pendiente_preparacion", "preparado_parcial", "preparado_completo"].includes(selected.status);
+  const canShip = selected && ["listo_para_envio", "preparado_completo"].includes(selected.status);
+
   return (
-    <div>
-      <PageHeader
-        title="Picking agrupado"
-        subtitle="Lotes de preparacion (PickingBatch). El stock se descuenta SOLO al cerrar el picking."
-        actions={canManage ? <Button onClick={openModal}>+ Nuevo picking</Button> : undefined}
-      />
-
-      {!batches?.length ? (
-        <EmptyState message="No hay pickings. Crea uno desde piezas importadas o desde una peticion." />
-      ) : (
-        <Table headers={["Codigo", "Cliente / Campana", "Agrupacion", "Instalador", "Resumen", "Prioridad", "Estado", ""]}>
-          {batches.map((b) => {
-            const s = summarizeBatch(b, incidents ?? []);
-            return (
-              <tr key={b.id}>
-                <Td className="whitespace-nowrap font-mono text-xs">
-                  <Link href={`/picking/${b.id}`} className="text-blue-600 hover:underline">{b.pickingCode}</Link>
-                </Td>
-                <Td>
-                  {catalog.clientName(b.clientId)}
-                  <div className="text-xs text-gray-400">{catalog.campaignName(b.campaignId)}</div>
-                </Td>
-                <Td className="text-xs">{groupingTypeMeta[b.groupingType]}</Td>
-                <Td className="text-xs">{b.assignedInstaller || "-"}</Td>
-                <Td className="text-xs text-gray-500">
-                  {s.totalPoints} destinos · {s.totalLines} lineas · {s.totalPrepared}/{s.totalUnits} prep.
-                  {s.openIncidents > 0 ? <span className="text-red-600"> · {s.openIncidents} inc.</span> : null}
-                </Td>
-                <Td><Badge tone={priorityMeta[b.priority].tone}>{priorityMeta[b.priority].label}</Badge></Td>
-                <Td><Badge tone={pickingBatchStatusMeta[b.status].tone}>{pickingBatchStatusMeta[b.status].label}</Badge></Td>
-                <Td>
-                  <div className="flex gap-2">
-                    <Link href={`/picking/${b.id}`}><Button variant="secondary">Abrir</Button></Link>
-                    {canManage && !b.closedAt ? <Button variant="danger" onClick={() => remove(b)}>Eliminar</Button> : null}
-                  </div>
-                </Td>
-              </tr>
-            );
-          })}
-        </Table>
+    <div className="space-y-4">
+      {notice && (
+        <div className="fixed right-4 top-16 z-50 max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800 shadow-lg">
+          {notice}
+        </div>
       )}
+      <PageHeader title="Gestión de Picking" subtitle="Preparación de material por instalador y campaña" />
 
-      <Modal title="Nuevo picking agrupado" open={open} onClose={() => setOpen(false)} wide>
-        <div className="flex flex-col gap-3">
-          <ErrorText errors={errors} />
-          <Field label="Origen del picking">
-            <Select value={source} onChange={(e) => setSource(e.target.value as "items" | "request")}>
-              <option value="items">Desde piezas / material importado (filtrado)</option>
-              <option value="request">Desde una peticion logistica</option>
-            </Select>
-          </Field>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Kpi label="Picking pendiente" value={kpis.pendiente} tone={kpis.pendiente ? "danger" : "default"} hint={kpis.pendiente ? "Requiere atención" : undefined} icon={<Timer className="h-4 w-4" />} />
+        <Kpi label="En preparación" value={kpis.enPrep} tone="blue" hint="En curso por almacén" icon={<ClipboardList className="h-4 w-4" />} />
+        <Kpi label="Preparados" value={kpis.preparados} tone="ok" hint="Listos para transporte" icon={<PackageCheck className="h-4 w-4" />} />
+      </div>
 
-          <Field label="Criterio de agrupacion">
-            <Select value={form.groupingType} onChange={(e) => setForm({ ...form, groupingType: e.target.value as GroupingType })}>
-              {groupingOptions.map((g) => <option key={g} value={g}>{groupingTypeMeta[g]}</option>)}
-            </Select>
-          </Field>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Filtros:</span>
+        {[["", "Todos"], ["activos", "Activos"], ["pendiente_preparacion", "Pendientes"], ["en_preparacion", "En preparación"], ["listo_para_envio", "Listos"], ["enviado", "Enviados"]].map(([value, label]) => (
+          <button
+            key={value}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusFilter === value ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+            onClick={() => setStatusFilter(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {source === "request" ? (
-            <Field label="Peticion logistica">
-              <Select value={form.requestId} onChange={(e) => setForm({ ...form, requestId: e.target.value })}>
-                <option value="">Selecciona peticion</option>
-                {pending.map((r) => <option key={r.id} value={r.id}>{r.requestCode} — {catalog.clientName(r.clientId)}</option>)}
-              </Select>
-            </Field>
+      <div className="grid items-start gap-4 xl:grid-cols-[1fr_400px]">
+        <Panel title="Listados de Picking" actions={<span className="text-xs text-slate-400">Mostrando {filtered.length} resultados</span>}>
+          {!filtered.length ? (
+            <Empty>No hay pickings con este filtro. Acepta una petición para generar el primero.</Empty>
           ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Cliente / CECO">
-                <Select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value, campaignId: "", installer: "", province: "", route: "" })}>
-                  <option value="">Selecciona cliente</option>
-                  {catalog.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Campana">
-                <Select value={form.campaignId} onChange={(e) => setForm({ ...form, campaignId: e.target.value })}>
-                  <option value="">(todas)</option>
-                  {catalog.campaigns.filter((c) => !form.clientId || c.clientId === form.clientId).map((c) => <option key={c.id} value={c.id}>{c.campaignName}</option>)}
-                </Select>
-              </Field>
-              <Field label="Instalador (Banc Sabadell)" hint={`${installers.length} instaladores con piezas disponibles`}>
-                <Select value={form.installer} onChange={(e) => setForm({ ...form, installer: e.target.value })}>
-                  <option value="">(cualquiera)</option>
-                  {installers.map((i) => <option key={i} value={i}>{i}</option>)}
-                </Select>
-              </Field>
-              <Field label="Provincia">
-                <Select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })}>
-                  <option value="">(cualquiera)</option>
-                  {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
-                </Select>
-              </Field>
-              <Field label="Ruta">
-                <Select value={form.route} onChange={(e) => setForm({ ...form, route: e.target.value })}>
-                  <option value="">(cualquiera)</option>
-                  {routes.map((r) => <option key={r} value={r}>{r}</option>)}
-                </Select>
-              </Field>
-              <Field label="Piezas que cumplen el filtro">
-                <div className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-600">{clientItems.filter((it) => (!form.installer || it.installer === form.installer) && (!form.province || it.province === form.province) && (!form.route || it.route === form.route)).length} piezas</div>
-              </Field>
+            <div className="overflow-x-auto">
+              <table className="lg-table">
+                <thead>
+                  <tr>
+                    <th>Picking</th>
+                    <th>Cliente / Campaña</th>
+                    <th>Mats / Prep.</th>
+                    <th>Estado</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((b) => {
+                    const p = progress(b);
+                    return (
+                      <tr key={b.id} className={`cursor-pointer ${selected?.id === b.id ? "lg-row-active" : ""}`} onClick={() => setSelectedId(b.id)}>
+                        <td>
+                          <p className="font-bold">{b.assignedInstaller || catalog.clientName(b.clientId)}</p>
+                          <p className="font-mono text-[10px] text-slate-400">{b.pickingCode}</p>
+                        </td>
+                        <td>
+                          <p className="text-xs font-medium">{catalog.clientName(b.clientId)}</p>
+                          <p className="text-xs text-slate-400">{catalog.campaignName(b.campaignId)}</p>
+                        </td>
+                        <td className="whitespace-nowrap text-xs font-semibold">{p.done} / {p.total}</td>
+                        <td><Chip tone={pickingBatchStatusMeta[b.status].tone}>{pickingBatchStatusMeta[b.status].label}</Chip></td>
+                        <td><ChevronRight className="h-4 w-4 text-blue-500" /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
+        </Panel>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={create}>Crear picking</Button>
-          </div>
-        </div>
-      </Modal>
+        {selected && selectedProgress && (
+          <Panel
+            title={<span className="lg-kpi-label">Detalle de picking</span>}
+            actions={<Chip tone="blue">{selected.pickingCode}</Chip>}
+            className="xl:sticky xl:top-16"
+          >
+            <div className="space-y-4">
+              <div>
+                <p className="text-lg font-extrabold">{selected.assignedInstaller || catalog.clientName(selected.clientId)}</p>
+                <p className="text-xs text-slate-500">
+                  Campaña: <span className="font-semibold text-blue-700">{catalog.campaignName(selected.campaignId)}</span>
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {canManage && selected.status === "pendiente_preparacion" && (
+                  <button className="lg-btn lg-btn-primary lg-btn-sm" disabled={busy} onClick={() => run(() => changeBatchStatus(selected.id, "en_preparacion", user?.id), "Picking en preparación")}>
+                    ▶ Preparar
+                  </button>
+                )}
+                <Link href={`/picking/${selected.id}/print`} className="lg-btn lg-btn-outline lg-btn-sm">
+                  <Printer className="h-3.5 w-3.5" /> Etiqueta
+                </Link>
+                <Link href={`/picking/${selected.id}`} className="lg-btn lg-btn-outline lg-btn-sm">
+                  Detalle completo
+                </Link>
+              </div>
+
+              <div>
+                <p className="lg-kpi-label mb-2">Materiales en la lista ({selected.lines.length})</p>
+                <ul className="lg-scroll max-h-80 space-y-2 overflow-y-auto pr-1">
+                  {selected.lines.map((l) => {
+                    const done = l.status === "preparado";
+                    const cancelled = l.status === "cancelada";
+                    return (
+                      <li key={l.id} className={`rounded-xl border p-2.5 ${done ? "border-blue-200 bg-blue-50/40" : "border-slate-100"} ${cancelled ? "opacity-50" : ""}`}>
+                        <div className="flex items-start gap-2.5">
+                          {canManage && !cancelled ? (
+                            <button disabled={busy} onClick={() => toggleLine(selected, l.id, !done)} className="mt-0.5 text-blue-600">
+                              {done ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4 text-slate-300" />}
+                            </button>
+                          ) : (
+                            <Square className="mt-0.5 h-4 w-4 text-slate-200" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="min-w-0 truncate text-sm font-semibold">{l.description}</p>
+                              {l.dimensions && <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-400">{l.dimensions}</span>}
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              {l.pointOfSaleName || l.officeName || "—"}
+                              {l.location && <> · 📍 {l.location}</>}
+                              {" · "}{l.preparedQuantity}/{l.quantity}
+                            </p>
+                            <Chip tone={pickingLineStatusMeta[l.status].tone}>{pickingLineStatusMeta[l.status].label}</Chip>
+                            {canManage && !cancelled && !done && (
+                              <button className="ml-2 text-[10px] font-semibold text-red-500 hover:underline" disabled={busy} onClick={() => run(() => cancelLine(selected.id, l.id, user?.id), "Línea cancelada")}>
+                                Cancelar línea
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div>
+                <div className="mb-1 flex justify-between text-[11px] font-semibold text-slate-500">
+                  <span>Progreso de Picking:</span>
+                  <span>{selectedProgress.done} / {selectedProgress.total} ({selectedProgress.pct}%)</span>
+                </div>
+                <Progress value={selectedProgress.pct} tone={selectedProgress.pct === 100 ? "green" : "blue"} />
+              </div>
+
+              {canManage && canClose && (
+                <button
+                  className="lg-btn lg-btn-primary w-full"
+                  disabled={busy}
+                  onClick={() => run(() => closePickingBatch(selected.id, user?.id), "Picking cerrado: stock descontado y listo para envío")}
+                >
+                  <PackageCheck className="h-4 w-4" /> Cerrar picking (descuenta stock)
+                </button>
+              )}
+              {canManage && (
+                <button
+                  className={`lg-btn w-full ${canShip ? "lg-btn-blue" : "lg-btn-outline"}`}
+                  disabled={busy || !canShip}
+                  title={canShip ? "Crear envío desde este picking" : "Cierra el picking para poder enviarlo"}
+                  onClick={() =>
+                    run(async () => {
+                      const carrier = window.prompt("Transportista (opcional):") ?? null;
+                      await createShipmentFromPicking(selected, { carrier, status: "preparado" }, user?.id);
+                    }, "Envío creado desde el picking")
+                  }
+                >
+                  <Send className="h-4 w-4" /> Enviar a Transporte
+                </button>
+              )}
+            </div>
+          </Panel>
+        )}
+      </div>
     </div>
   );
 }

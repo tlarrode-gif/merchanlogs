@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { importBatchStatusMeta, importTypeMeta } from "@/lib/status";
 import { formatDateTime } from "@/lib/dates";
+import { MaterialsTabs } from "@/components/materials-tabs";
 
 const importTypes: ImportType[] = ["isdin_vinilos", "banc_sabadell", "generico"];
 
@@ -58,6 +59,7 @@ export default function ImportacionesPage() {
 
   return (
     <div>
+      <MaterialsTabs />
       <PageHeader
         title="Carga masiva (copiar/pegar desde Excel)"
         subtitle="Pega filas desde Excel, previsualiza, valida y confirma. Al confirmar se crea stock real y movimientos."

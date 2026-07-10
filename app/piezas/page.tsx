@@ -7,6 +7,7 @@ import { useData } from "@/components/use-data";
 import { useCatalog } from "@/components/use-catalog";
 import { Badge, EmptyState, NoAccess, PageHeader, Select, Table, Td } from "@/components/ui";
 import { materialItemStatusMeta } from "@/lib/status";
+import { MaterialsTabs } from "@/components/materials-tabs";
 
 export default function PiezasPage() {
   const { can } = useSession();
@@ -28,6 +29,7 @@ export default function PiezasPage() {
 
   return (
     <div>
+      <MaterialsTabs />
       <PageHeader
         title="Piezas unitarias"
         subtitle="Inventario de piezas individuales (ej. vinilos VIN de ISDIN). Cada codigo es unico."
