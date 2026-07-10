@@ -27,7 +27,11 @@ export interface DataAdapter {
 
 /** Origen de datos activo. Controlado por NEXT_PUBLIC_DATA_SOURCE (default: local). */
 export function getAdapter(): DataAdapter {
-  // En el futuro:
-  // if (process.env.NEXT_PUBLIC_DATA_SOURCE === "supabase") return supabaseAdapter;
+  if (process.env.NEXT_PUBLIC_DATA_SOURCE === "supabase") {
+    // Import perezoso para no cargar el adaptador Supabase al trabajar en local.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { supabaseAdapter } = require("@/services/supabase-adapter") as typeof import("@/services/supabase-adapter");
+    return supabaseAdapter;
+  }
   return localAdapter;
 }
