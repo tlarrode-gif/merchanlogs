@@ -26,6 +26,7 @@ import {
 import { getAdapter } from "@/services/adapter";
 import { makeCrud } from "@/services/crud";
 import { applyStockDelta, availableStock, reserveStock, releaseReservation } from "@/services/stock.service";
+import { changeRequestStatus } from "@/services/requests.service";
 import { canTransition, pickingBatchStatusMeta } from "@/lib/status";
 import { nextCode, uid } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
@@ -92,10 +93,12 @@ async function createBatch(
   );
 
   // Reservas: por material agregado (sumando cantidades) y por pieza unitaria.
+  // Las lineas "faltante" (sin stock disponible al crear) NO reservan: quedan
+  // a la espera de material y se reservan al reactivarlas.
   const reservedByMaterial = new Map<string, number>();
   const adapter = getAdapter();
   for (const line of lines) {
-    if (line.materialId) {
+    if (line.materialId && line.status !== "faltante") {
       reservedByMaterial.set(line.materialId, (reservedByMaterial.get(line.materialId) ?? 0) + line.quantity);
     }
     if (line.materialItemId) {
@@ -229,6 +232,99 @@ export async function createPickingFromRequest(
     lines,
     actorId
   );
+}
+
+// ---------------------------------------------------------------------------
+// Aceptacion en 1 clic (peticion → picking)
+// ---------------------------------------------------------------------------
+
+export interface CoverageShortage {
+  materialId: string;
+  name: string;
+  requested: number;
+  available: number;
+}
+
+export interface AcceptRequestResult {
+  batch: PickingBatch;
+  shortages: CoverageShortage[];
+  requestStatus: "preparando" | "pendiente_material";
+}
+
+/**
+ * Flujo de 1 clic: acepta la peticion, reserva el stock disponible y genera el
+ * picking. Las lineas sin stock suficiente se crean como "faltante" (sin
+ * reservar) y la peticion queda "pendiente_material"; si todo esta cubierto,
+ * queda "preparando".
+ */
+export async function acceptRequestAndCreatePicking(
+  request: LogisticsRequest,
+  actorId?: string | null
+): Promise<AcceptRequestResult> {
+  const adapter = getAdapter();
+  const all = await crud.list();
+  const existing = all.find((p) => p.logisticsRequestId === request.id && p.status !== "cancelado");
+  if (existing) throw new Error(`La peticion ya tiene el picking ${existing.pickingCode}.`);
+  if (!request.materials.length) throw new Error("La peticion no tiene materiales.");
+  if (!["solicitada", "en_revision", "pendiente_material"].includes(request.status)) {
+    throw new Error(`La peticion esta "${request.status}" y no admite aceptacion.`);
+  }
+
+  const materials = await adapter.list("materials");
+  const byId = new Map<string, Material>(materials.map((m) => [m.id, m]));
+  const shortages: CoverageShortage[] = [];
+  const lines: PickingLine[] = request.materials.map((l) => {
+    const m = byId.get(l.materialId);
+    const available = m ? Math.max(0, (m.currentStock ?? 0) - (m.reservedStock ?? 0)) : 0;
+    const covered = available >= l.quantity;
+    if (!covered) shortages.push({ materialId: l.materialId, name: m?.name ?? "(material)", requested: l.quantity, available });
+    return {
+      id: uid("pl"),
+      materialId: l.materialId,
+      materialItemId: null,
+      description: m?.name ?? "(material)",
+      quantity: l.quantity,
+      preparedQuantity: 0,
+      status: covered ? "pendiente" : "faltante",
+      pointOfSaleName: request.destination ?? null,
+      officeName: null,
+      officeCode: null,
+      address: null,
+      city: null,
+      province: null,
+      installer: null,
+      route: null,
+      materialType: m?.type ?? null,
+      dimensions: m?.dimensions ?? null,
+      location: m?.location ?? null,
+      serviceCode: null,
+      incidentId: null,
+      notes: covered ? l.notes ?? null : `Stock disponible ${available}/${l.quantity}`
+    };
+  });
+
+  const batch = await createBatch(
+    {
+      clientId: request.clientId,
+      campaignId: request.campaignId,
+      groupingType: "manual",
+      priority: request.priority,
+      logisticsRequestId: request.id
+    },
+    lines,
+    actorId
+  );
+
+  const requestStatus = shortages.length ? "pendiente_material" : "preparando";
+  await changeRequestStatus(
+    request.id,
+    requestStatus,
+    shortages.length
+      ? `Picking ${batch.pickingCode} generado con ${shortages.length} linea(s) sin stock`
+      : `Picking ${batch.pickingCode} generado`,
+    actorId
+  );
+  return { batch, shortages, requestStatus };
 }
 
 // ---------------------------------------------------------------------------

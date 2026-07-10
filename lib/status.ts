@@ -48,7 +48,7 @@ interface StatusMeta<T extends string> {
 
 export const requestStatusMeta: Record<LogisticsRequestStatus, StatusMeta<LogisticsRequestStatus>> = {
   borrador: { label: "Borrador", tone: "gray", next: ["solicitada", "cancelada"] },
-  solicitada: { label: "Solicitada", tone: "blue", next: ["en_revision", "preparando", "cancelada"] },
+  solicitada: { label: "Solicitada", tone: "blue", next: ["en_revision", "preparando", "pendiente_material", "cancelada"] },
   en_revision: { label: "En revision", tone: "blue", next: ["preparando", "pendiente_material", "cancelada"] },
   preparando: { label: "Preparando", tone: "amber", next: ["pendiente_material", "lista_para_envio", "incidencia"] },
   pendiente_material: { label: "Pendiente material", tone: "amber", next: ["preparando", "incidencia", "cancelada"] },

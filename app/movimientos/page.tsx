@@ -7,6 +7,7 @@ import { useCatalog } from "@/components/use-catalog";
 import { Badge, EmptyState, NoAccess, PageHeader, Table, Td } from "@/components/ui";
 import { movementTypeMeta } from "@/lib/status";
 import { formatDateTime } from "@/lib/dates";
+import { MaterialsTabs } from "@/components/materials-tabs";
 
 export default function MovimientosPage() {
   const { can } = useSession();
@@ -19,6 +20,7 @@ export default function MovimientosPage() {
 
   return (
     <div>
+      <MaterialsTabs />
       <PageHeader
         title="Movimientos de stock"
         subtitle="Registro automatico de cada cambio de stock (entradas, ajustes, preparacion, envios)."

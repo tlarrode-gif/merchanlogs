@@ -224,3 +224,29 @@ su documentacion, mas la primera suite de tests automatizada.
 - Conexion real Supabase/MerchanOPS y auth compartida.
 - Avisos por email en el flujo OPS (estructura preparada, sin enviar).
 - Ampliar cobertura de tests a entradas, envios, incidencias y maquinas de estado.
+
+---
+
+## Rediseño UX completo (mockups UI_LOGS, 2026-07-10)
+
+Nueva interfaz basada en el design kit aprobado (Primary #0F172A, Secondary
+#3B82F6, Inter): sidebar oscura, KPI cards, tablas maestro-detalle y chips.
+
+- **Menú nuevo**: Dashboard · Campañas (+ Clientes/Servicios como pestañas) ·
+  Peticiones · Materiales (+ Piezas VIN/Movimientos/Carga masiva como
+  pestañas) · Entradas · Picking · Envíos · Incidencias · Reproducciones ·
+  Instaladores · Proveedores · Insights · Configuración.
+- **Flujo de 1 clic**: "Aceptar y generar picking" en Peticiones
+  (`acceptRequestAndCreatePicking`): reserva el stock disponible, crea el
+  picking y deja la petición en `preparando` (o `pendiente_material` si
+  alguna línea no tiene stock: la línea nace `faltante` sin reservar).
+- **Picking maestro-detalle**: checklist de líneas, progreso, cerrar picking
+  y "Enviar a Transporte" desde la misma pantalla.
+- **Dashboard**: KPIs, evolución de piezas por estado, alertas críticas,
+  peticiones pendientes e incidencias por tipo (donut).
+- **Secciones nuevas** con datos reales donde existen: Reproducciones
+  (incidencias de material), Instaladores (readiness desde pickings/envíos),
+  Proveedores (agregado de entradas), Insights (analítica calculada) y
+  Configuración (reglas de alerta en localStorage + vocabularios).
+- Verificado: lint, tsc, 40/40 tests, build (23 rutas) y humo HTTP 200 en
+  las 10 pantallas principales.

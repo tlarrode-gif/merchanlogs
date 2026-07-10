@@ -12,6 +12,7 @@ import {
 } from "@/components/ui";
 import { materialStatusMeta } from "@/lib/status";
 import { required, validate, nonNegative } from "@/lib/validation";
+import { MaterialsTabs } from "@/components/materials-tabs";
 
 const types: MaterialType[] = ["vinilo", "plv", "display", "carteleria", "muestra", "promocional", "generico", "otro"];
 const statuses: MaterialStatus[] = ["pendiente_produccion", "pendiente_recepcion", "recibido", "preparado", "enviado", "agotado", "activo"];
@@ -92,6 +93,7 @@ export default function MaterialesPage() {
 
   return (
     <div>
+      <MaterialsTabs />
       <PageHeader
         title="Materiales"
         subtitle="Inventario de materiales con stock, minimos y estado."
