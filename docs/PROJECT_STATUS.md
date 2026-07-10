@@ -157,6 +157,32 @@ previa migracion a Supabase Auth + RLS (ver docs/SECURITY_AUDIT.md).
 
 ---
 
+## Fase 3b — Escritura en Supabase (nuevo)
+
+MerchanLOGS ya **escribe** en las tablas `logistics_*` compartidas (materiales,
+stock, movimientos, piezas VIN, entradas, peticiones, pickings, envios e
+incidencias). Reglas implementadas en `services/supabase-adapter.ts` y
+documentadas en `docs/SUPABASE_RECONCILIATION.md`:
+
+- Maestros de OPS (clients/campanas/servicios/usuarios): solo lectura SIEMPRE.
+- Mapas inversos dominio→DB que solo emiten valores admitidos por los CHECK
+  constraints reales del DB (test dedicado que lo garantiza).
+- IDs generados por el DB; columnas uuid protegidas frente a ids locales.
+- Movimientos de stock inmutables; `reset()` bloqueado; `activo` de materiales
+  no se toca desde LOGS.
+- Doble barrera de stock: validacion de dominio + CHECK del DB (sin negativos
+  ni sobre-reserva).
+
+Verificacion: lint, tsc, build (18 rutas) y **35 tests en verde** (13 nuevos:
+guardas de co-propiedad y validacion de vocabulario contra los CHECK).
+La prueba de escritura en vivo se hara desde el deploy (el sandbox no tiene
+salida de red); usar /estado para diagnostico de conexion.
+
+Pendiente fase 3c: Supabase Auth compartida + RLS antes de dar acceso a
+usuarios finales (hoy la base no tiene RLS y ambas apps usan la anon key).
+
+---
+
 ## Fase 3 (en curso) — Endurecimiento de la regla de stock + tests
 
 Auditoria de la capa de dominio y correccion de incoherencias entre la logica y
