@@ -11,9 +11,36 @@ módulo de logística de MerchanOPS) y este documento mapea cada colección de
 LOGS a su tabla real. `docs/SUPABASE_SCHEMA_DRAFT.md` queda **obsoleto** como
 esquema a crear; se conserva solo como referencia histórica.
 
-Despliegue gradual: **fase 3a = solo lectura** (este commit), fase 3b =
-escritura entidad a entidad, fase 3c = Supabase Auth + RLS (obligatorio antes
-de producción, ver `docs/SECURITY_AUDIT.md`).
+Despliegue gradual: fase 3a = solo lectura (completada), **fase 3b =
+escritura en tablas `logistics_*`** (este commit), fase 3c = Supabase Auth +
+RLS (obligatorio antes de producción, ver `docs/SECURITY_AUDIT.md`).
+
+## Fase 3b — reglas de escritura (implementadas)
+
+- **Maestros de OPS bloqueados**: `clients`, `grandes_campanas`, `services` y
+  `app_users` lanzan error ante cualquier `insert`/`update`/`remove`.
+- **Solo vocabulario admitido**: las tablas compartidas tienen CHECK
+  constraints; los mapas inversos (dominio → DB) emiten únicamente valores
+  admitidos, verificados contra `pg_constraint` del proyecto real
+  (2026-07-10) y protegidos por test (`tests/supabase-adapter.test.ts`).
+  Estados de LOGS sin equivalente exacto se traducen al valor más cercano
+  (ej. picking `cancelado` → `cerrado`; línea `cancelada` → `faltante` con
+  justificación).
+- **IDs del DB**: al insertar se descarta el id local, el DB genera el uuid
+  (`uuid_generate_v4()`) y el adapter devuelve la entidad releída.
+- **Columnas uuid protegidas**: las referencias estrictas (`material_id`,
+  `picking_id`, `request_id`, `envio_id`…) solo reciben uuids reales
+  (`uuidOrNull`/`requireUuid`); jamás ids locales ni texto libre.
+- **No se toca `activo` de materiales** desde LOGS (desactivar un material
+  afectaría a OPS); el estado "agotado" se deriva del stock en lectura.
+- **Movimientos de stock inmutables**: solo `insert` (trazabilidad).
+- **Entradas**: LOGS modela 1 entrada = 1 material; al escribir se crea
+  cabecera + línea y el id de dominio sigue siendo el id de línea. El borrado
+  elimina solo la línea (la cabecera puede tener líneas de OPS).
+- **Integridad de stock garantizada por el DB**: el CHECK de
+  `logistics_stock` impide físico/reservado negativos o sobre-reserva, como
+  segunda barrera además de la validación del dominio.
+- `reset()` sigue BLOQUEADO para siempre.
 
 ## Mapa colección → tabla
 
