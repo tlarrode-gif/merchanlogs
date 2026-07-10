@@ -41,6 +41,7 @@ import {
 } from "@/types";
 import { DataAdapter } from "@/services/adapter";
 import { localAdapter } from "@/services/local-adapter";
+import { mirrorPickingLink, mirrorRequestStatus, mirrorShipmentLink } from "@/services/ops-mirror";
 import { supabase } from "@/lib/supabase";
 
 // ---------------------------------------------------------------------------
@@ -945,6 +946,8 @@ const logisticsRequestsWriter: CollectionWriter<"logisticsRequests"> = {
     if (patch.destination !== undefined) row.delivery_address = patch.destination;
     if (patch.notes !== undefined) row.logistics_comment = patch.notes;
     await updateRow("logistics_requests", id, row);
+    // Retorno en tiempo real hacia OPS: necesidades y tarjetas de servicios/ISDIN.
+    if (typeof row.status === "string") await mirrorRequestStatus(id, row.status);
 
     if (patch.materials) {
       const { data, error } = await client()
@@ -1014,6 +1017,8 @@ const pickingBatchesWriter: CollectionWriter<"pickingBatches"> = {
     for (const line of p.lines ?? []) {
       await insertRow("logistics_picking_lines", pickingLineToDb(str(row.id), line));
     }
+    // Retorno hacia OPS: enlaza el picking con las necesidades de su peticion.
+    if (isUuid(p.logisticsRequestId)) await mirrorPickingLink(p.logisticsRequestId, str(row.id));
     return str(row.id);
   },
   async update(id, patch) {
@@ -1066,6 +1071,8 @@ const shipmentsWriter: CollectionWriter<"shipments"> = {
       estado: shipmentStatusToDb[s.status] ?? "pendiente",
       destinatario_id: s.destination ?? null
     });
+    // Retorno hacia OPS: enlaza el envio con la peticion y sus necesidades.
+    if (isUuid(s.logisticsRequestId)) await mirrorShipmentLink(s.logisticsRequestId, str(row.id));
     return str(row.id);
   },
   async update(id, patch) {

@@ -42,6 +42,23 @@ RLS (obligatorio antes de producción, ver `docs/SECURITY_AUDIT.md`).
   segunda barrera además de la validación del dominio.
 - `reset()` sigue BLOQUEADO para siempre.
 
+### Espejo de retorno hacia OPS (`services/ops-mirror.ts`)
+
+Excepción acotada y pactada a la regla "LOGS no escribe maestros": cuando LOGS
+cambia el estado de una petición, crea un picking o un envío, actualiza
+**solo columnas de lista blanca** para que OPS lo vea al instante:
+
+- `logistics_material_requirements`: `status`, `picking_id`, `shipment_id`,
+  `updated_at` (jamás reabre necesidades `consumida`/`cancelada`).
+- `services`: `logistics_status`, `material_status`, `logistics_last_sync_at`.
+- `isdin_vinyls`: `logistics_status`, `logistics_picking_id`,
+  `logistics_shipment_id`, `logistics_blocked`, `logistics_last_sync_at`.
+
+Las listas blancas y el vocabulario (CHECK de requirements) están fijados por
+test en `tests/ops-mirror.test.ts`. El espejo es best-effort: si falla, la
+operación principal de LOGS no se rompe y el reverse-sync de OPS lo corrige.
+Ver `merchanops/docs/AUDITORIA_COMUNICACION_OPS_LOGS.md`.
+
 ## Mapa colección → tabla
 
 | Colección LOGS | Tabla(s) Supabase | Notas |
