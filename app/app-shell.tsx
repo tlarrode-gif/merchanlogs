@@ -172,11 +172,27 @@ function TopBar() {
   );
 }
 
+/**
+ * Aviso bloqueante de modo local (auditoría A9): si el despliegue no tiene
+ * NEXT_PUBLIC_DATA_SOURCE=supabase, la app corre sobre datos de demostración
+ * en el navegador. Eso jamás debe pasar desapercibido en producción.
+ */
+function LocalModeBanner() {
+  if (process.env.NEXT_PUBLIC_DATA_SOURCE === "supabase") return null;
+  return (
+    <div className="sticky top-0 z-30 bg-red-600 px-4 py-1.5 text-center text-xs font-bold text-white">
+      ⚠ MODO DEMO LOCAL — esta instancia NO está conectada al backend compartido: los datos son de prueba y viven
+      solo en este navegador. Si esto es producción, falta configurar NEXT_PUBLIC_DATA_SOURCE=supabase.
+    </div>
+  );
+}
+
 function Chrome({ children }: { children: React.ReactNode }) {
   const { loading } = useSession();
   const [campaignId, setCampaignId] = useState("");
   return (
     <CampaignFilterContext.Provider value={{ campaignId, setCampaignId }}>
+      <LocalModeBanner />
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
