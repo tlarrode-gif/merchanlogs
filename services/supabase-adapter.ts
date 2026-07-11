@@ -608,7 +608,7 @@ async function listPickingBatches() {
     status: mapStatus(p.estado, pickingStatusMap, "pendiente_preparacion"),
     priority: "normal" as const,
     assignedTo: null,
-    closedAt: null,
+    closedAt: strOrNull(p.cerrado_at),
     notes: null,
     lines: (linesByPicking.get(str(p.id)) ?? []).map((l) => ({
       id: str(l.id),

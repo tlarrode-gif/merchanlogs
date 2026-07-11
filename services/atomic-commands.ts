@@ -51,8 +51,17 @@ export async function closePickingAtomic(pickingId: string, actor?: string | nul
   await rpc("logistics_close_picking", { p_picking_id: pickingId, p_actor: actor ?? null });
 }
 
-export async function shipPickingAtomic(pickingId: string, carrier?: string | null, actor?: string | null): Promise<void> {
-  await rpc("logistics_ship_picking", { p_picking_id: pickingId, p_transportista: carrier ?? null, p_actor: actor ?? null });
+/** Genera el envío en el DB (transaccional) y devuelve su id. */
+export async function shipPickingAtomic(pickingId: string, carrier?: string | null, actor?: string | null): Promise<{ shipmentId: string }> {
+  const { data, error } = await supabase!.rpc("logistics_ship_picking", {
+    p_picking_id: pickingId,
+    p_transportista: carrier ?? null,
+    p_actor: actor ?? null
+  });
+  if (error) throw new Error(error.message);
+  const shipmentId = String((data as { shipmentId?: string })?.shipmentId ?? "");
+  if (!shipmentId) throw new Error("El comando de envío no devolvió el identificador del envío.");
+  return { shipmentId };
 }
 
 export async function confirmDeliveryAtomic(shipmentId: string, actor?: string | null): Promise<void> {
