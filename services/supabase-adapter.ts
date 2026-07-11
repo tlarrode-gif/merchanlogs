@@ -427,7 +427,8 @@ async function listServices() {
 }
 
 async function listUsers() {
-  const rows = await fetchAll("app_users");
+  // C1: nunca descargar la columna password (hash) al navegador.
+  const rows = await fetchAll("app_users", "id,username,display_name,role,active,provinces,created_at,updated_at");
   return rows.map((r) => ({
     id: str(r.id),
     username: str(r.username),

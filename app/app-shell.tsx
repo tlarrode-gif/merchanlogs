@@ -31,6 +31,7 @@ import { ConnectionBadge } from "@/components/connection-status";
 import { Permission, roleLabels } from "@/lib/permissions";
 import { getAdapter } from "@/services/adapter";
 import { useData } from "@/components/use-data";
+import { isRealAuthMode, loginWithPassword, logout } from "@/services/session";
 
 interface NavItem {
   href: string;
@@ -156,19 +157,86 @@ function TopBar() {
           </span>
         )}
       </Link>
-      <label className="flex items-center gap-2 text-sm">
-        <select value={user?.id ?? ""} onChange={(e) => switchUser(e.target.value)} className="lg-select w-44">
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.displayName} ({roleLabels[u.role]})
-            </option>
-          ))}
-        </select>
-      </label>
-      <button onClick={handleReset} className="text-[10px] text-slate-300 hover:text-red-600" title="Reiniciar datos locales">
-        Reset
-      </button>
+      {isRealAuthMode() ? (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="max-w-40 truncate font-medium text-slate-700" title={user?.displayName ?? ""}>
+            {user?.displayName ?? "—"}
+            {user && <span className="ml-1 text-xs font-normal text-slate-400">({roleLabels[user.role]})</span>}
+          </span>
+          <button
+            onClick={() => { void logout(); }}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Salir
+          </button>
+        </div>
+      ) : (
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            <select value={user?.id ?? ""} onChange={(e) => switchUser(e.target.value)} className="lg-select w-44">
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.displayName} ({roleLabels[u.role]})
+                </option>
+              ))}
+            </select>
+          </label>
+          <button onClick={handleReset} className="text-[10px] text-slate-300 hover:text-red-600" title="Reiniciar datos locales">
+            Reset
+          </button>
+        </>
+      )}
     </header>
+  );
+}
+
+/**
+ * Login real (C1): con NEXT_PUBLIC_DATA_SOURCE=supabase la app exige iniciar
+ * sesión con los mismos usuarios y contraseñas de MerchanOPS. Sin sesión no se
+ * muestra ninguna pantalla ni dato.
+ */
+function LoginScreen() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    const result = await loginWithPassword(username, password);
+    setBusy(false);
+    if (result.ok === false) setError(result.error);
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-sm font-black text-white">M</span>
+          <div className="leading-tight">
+            <p className="text-sm font-extrabold text-slate-900">
+              Merchan<span className="text-blue-600">LOGS</span>
+            </p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Logistics Management</p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500">Entra con tu usuario y contraseña de MerchanOPS.</p>
+        {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
+        <label className="block text-sm">
+          <span className="font-medium text-slate-700">Usuario</span>
+          <input className="lg-input mt-1" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium text-slate-700">Contraseña</span>
+          <input className="lg-input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        </label>
+        <button disabled={busy} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+          {busy ? "Entrando..." : "Entrar"}
+        </button>
+      </form>
+    </main>
   );
 }
 
@@ -188,8 +256,10 @@ function LocalModeBanner() {
 }
 
 function Chrome({ children }: { children: React.ReactNode }) {
-  const { loading } = useSession();
+  const { loading, user } = useSession();
   const [campaignId, setCampaignId] = useState("");
+  // C1: en modo supabase, sin sesión real de Supabase Auth no se muestra la app.
+  if (isRealAuthMode() && !loading && !user) return <LoginScreen />;
   return (
     <CampaignFilterContext.Provider value={{ campaignId, setCampaignId }}>
       <LocalModeBanner />
