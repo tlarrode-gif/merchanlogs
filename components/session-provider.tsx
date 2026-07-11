@@ -31,10 +31,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [dataVersion, setDataVersion] = useState(0);
 
   const load = useCallback(async () => {
-    const [current, all] = await Promise.all([getCurrentUser(), listUsers()]);
-    setUser(current);
-    setUsers(all);
-    setLoading(false);
+    // C1: antes del login (o con RLS activa y sin sesión) las consultas pueden
+    // fallar; eso no debe dejar la app colgada en "Cargando...": se resuelve a
+    // "sin usuario" y el shell muestra el login.
+    try {
+      const current = await getCurrentUser();
+      const all = current ? await listUsers() : [];
+      setUser(current);
+      setUsers(all);
+    } catch {
+      setUser(null);
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
