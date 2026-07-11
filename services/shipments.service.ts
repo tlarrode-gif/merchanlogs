@@ -7,6 +7,7 @@ import { LogisticsRequest, PickingBatch, Shipment } from "@/types";
 import { makeCrud, NewEntity } from "@/services/crud";
 import { changeRequestStatus } from "@/services/requests.service";
 import { getAdapter } from "@/services/adapter";
+import { atomicCommandsAvailable, confirmDeliveryAtomic, shipPickingAtomic } from "@/services/atomic-commands";
 import { nextCode } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { validate, required } from "@/lib/validation";
@@ -73,6 +74,39 @@ export async function createShipmentFromPicking(
   data: Partial<NewEntity<Shipment>>,
   actorId?: string | null
 ): Promise<Shipment> {
+  // A8: en modo Supabase el envio lo crea el comando atomico
+  // logistics_ship_picking (misma transaccion que el enlace picking->envio;
+  // rechaza pickings no preparados o con envio ya generado). Aqui solo se
+  // completan los campos del envio y las piezas unitarias.
+  if (atomicCommandsAvailable(batch.id)) {
+    const { shipmentId } = await shipPickingAtomic(batch.id, data.carrier ?? null, actorId);
+    const shipment = await crud.update(
+      shipmentId,
+      {
+        trackingNumber: data.trackingNumber ?? null,
+        shippingDate: data.shippingDate ?? null,
+        estimatedDeliveryDate: data.estimatedDeliveryDate ?? null,
+        deliveryDate: data.deliveryDate ?? null,
+        status: data.status ?? "preparado",
+        destination: data.destination ?? batch.assignedInstaller ?? null,
+        notes: data.notes ?? `Envio del picking ${batch.pickingCode}`
+      },
+      actorId
+    );
+    const adapterAtomic = getAdapter();
+    for (const line of batch.lines) {
+      if (line.materialItemId && line.status === "preparado") {
+        await adapterAtomic.update("materialItems", line.materialItemId, {
+          status: "enviado",
+          shipmentId: shipment.id,
+          updatedAt: nowIso(),
+          updatedBy: actorId ?? null
+        });
+      }
+    }
+    return shipment;
+  }
+
   const shipmentCode = await nextShipmentCode();
   const shipment = await crud.create(
     {
@@ -106,4 +140,19 @@ export async function createShipmentFromPicking(
     }
   }
   return shipment;
+}
+
+
+/**
+ * A8: confirmacion de entrega exactamente-una-vez. En modo Supabase usa el
+ * comando atomico logistics_confirm_delivery (fija fecha real y rechaza una
+ * segunda confirmacion); en modo local mantiene el update simple.
+ */
+export async function confirmDelivery(shipment: Shipment, actorId?: string | null): Promise<Shipment> {
+  if (atomicCommandsAvailable(shipment.id)) {
+    await confirmDeliveryAtomic(shipment.id, actorId);
+    const fresh = await crud.get(shipment.id);
+    return fresh ?? { ...shipment, status: "entregado" };
+  }
+  return crud.update(shipment.id, { status: "entregado", deliveryDate: nowIso() }, actorId);
 }

@@ -26,6 +26,7 @@ import {
 import { getAdapter } from "@/services/adapter";
 import { makeCrud } from "@/services/crud";
 import { applyStockDelta, availableStock, reserveStock, releaseReservation } from "@/services/stock.service";
+import { atomicCommandsAvailable, closePickingAtomic } from "@/services/atomic-commands";
 import { changeRequestStatus } from "@/services/requests.service";
 import { canTransition, pickingBatchStatusMeta } from "@/lib/status";
 import { nextCode, uid } from "@/lib/ids";
@@ -487,6 +488,39 @@ export async function closePickingBatch(batchId: string, actorId?: string | null
   );
   if (blocking.length > 0) {
     throw new Error(`No se puede cerrar: hay ${blocking.length} incidencia(s) que bloquean el picking`);
+  }
+
+  // A8: en modo Supabase, TODO el efecto de stock (descuento de lo preparado +
+  // liberacion de reservas, lineas listas y faltantes) lo hace el comando
+  // atomico logistics_close_picking en UNA transaccion, con idempotencia dura
+  // (cerrado_at: un segundo cierre falla y NO descuenta dos veces). Aqui NO se
+  // llama a releaseReservation/applyStockDelta: seria doble descuento.
+  if (atomicCommandsAvailable(batchId)) {
+    await closePickingAtomic(batchId, actorId);
+    let atomicConsumed = 0;
+    let atomicPartial = false;
+    for (const line of batch.lines) {
+      if (line.preparedQuantity < line.quantity) atomicPartial = true;
+      if (line.status === "preparado") atomicConsumed += line.materialItemId ? 1 : line.preparedQuantity;
+      if (!line.materialItemId) continue;
+      if (line.status === "preparado") {
+        await adapter.update("materialItems", line.materialItemId, {
+          status: "preparado",
+          updatedAt: nowIso(),
+          updatedBy: actorId ?? null
+        });
+      } else {
+        await adapter.update("materialItems", line.materialItemId, {
+          status: "recibido",
+          pickingBatchId: null,
+          pickingLineId: null,
+          updatedAt: nowIso(),
+          updatedBy: actorId ?? null
+        });
+      }
+    }
+    const closedAtomic = await crud.update(batchId, { status: "listo_para_envio", closedAt: nowIso() }, actorId);
+    return { batch: closedAtomic, consumedUnits: atomicConsumed, partial: atomicPartial };
   }
 
   let consumedUnits = 0;

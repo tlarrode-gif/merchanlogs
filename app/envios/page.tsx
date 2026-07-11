@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Shipment, ShipmentStatus } from "@/types";
-import { listShipments, updateShipment, removeShipment, createShipmentFromRequest, createShipment, nextShipmentCode } from "@/services/shipments.service";
+import { listShipments, updateShipment, removeShipment, createShipmentFromRequest, createShipment, nextShipmentCode, confirmDelivery } from "@/services/shipments.service";
 import { listRequests } from "@/services/requests.service";
 import { useSession } from "@/components/session-provider";
 import { useData } from "@/components/use-data";
@@ -59,9 +59,16 @@ export default function EnviosPage() {
   }
 
   async function setStatus(s: Shipment, status: ShipmentStatus) {
-    const patch: Partial<Shipment> = { status };
-    if (status === "entregado") patch.deliveryDate = new Date().toISOString();
-    await updateShipment(s.id, patch, user?.id);
+    try {
+      if (status === "entregado") {
+        // A8: entrega exactamente-una-vez via comando atomico.
+        await confirmDelivery(s, user?.id);
+      } else {
+        await updateShipment(s.id, { status }, user?.id);
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "No se pudo cambiar el estado del envio");
+    }
     refreshData();
   }
 
