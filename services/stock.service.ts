@@ -13,6 +13,7 @@
 
 import { Material, StockMovement, StockMovementType, RelatedEntityType } from "@/types";
 import { getAdapter } from "@/services/adapter";
+import { atomicCommandsAvailable, releaseReservationAtomic, reserveStockAtomic } from "@/services/atomic-commands";
 import { makeCrud } from "@/services/crud";
 import { nowIso } from "@/lib/dates";
 
@@ -131,6 +132,16 @@ export async function reserveStock(
   actorId?: string | null
 ): Promise<Material> {
   if (quantity <= 0) return getRequiredMaterial(materialId);
+  if (!Number.isFinite(quantity)) throw new Error(`Cantidad de reserva invalida: ${quantity}`);
+
+  // Modo Supabase: comando atomico en PostgreSQL (FOR UPDATE + movimiento y
+  // saldo en la misma transaccion). Evita la carrera de dos usuarios
+  // reservando las mismas unidades a la vez.
+  if (atomicCommandsAvailable(materialId)) {
+    await reserveStockAtomic(materialId, quantity, `Reserva por picking ${relatedEntityId}`, actorId);
+    return getRequiredMaterial(materialId);
+  }
+
   const adapter = getAdapter();
   const material = await adapter.get("materials", materialId);
   if (!material) throw new Error(`Material ${materialId} no encontrado`);
@@ -167,6 +178,12 @@ export async function releaseReservation(
   actorId?: string | null
 ): Promise<Material> {
   if (quantity <= 0) return getRequiredMaterial(materialId);
+
+  if (atomicCommandsAvailable(materialId)) {
+    await releaseReservationAtomic(materialId, quantity, `Liberacion de reserva por picking ${relatedEntityId}`, actorId);
+    return getRequiredMaterial(materialId);
+  }
+
   const adapter = getAdapter();
   const material = await adapter.get("materials", materialId);
   if (!material) throw new Error(`Material ${materialId} no encontrado`);
