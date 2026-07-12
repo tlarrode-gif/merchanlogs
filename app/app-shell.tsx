@@ -8,9 +8,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   Bell,
+  Smartphone,
   Boxes,
   ClipboardList,
   Cog,
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { href: "/materiales", label: "Materiales", permission: "materials.view", icon: <Boxes className="h-4 w-4" /> },
   { href: "/entradas", label: "Entradas", permission: "entries.view", icon: <Warehouse className="h-4 w-4" /> },
   { href: "/picking", label: "Picking", permission: "picking.view", icon: <ClipboardList className="h-4 w-4" /> },
+  { href: "/picking/movil", label: "Picking móvil", permission: "picking.view", icon: <Smartphone className="h-4 w-4" /> },
   { href: "/envios", label: "Envíos", permission: "shipments.view", icon: <Truck className="h-4 w-4" /> },
   { href: "/incidencias", label: "Incidencias", permission: "incidents.view", icon: <TriangleAlert className="h-4 w-4" /> },
   { href: "/reproducciones", label: "Reproducciones", permission: "incidents.view", icon: <Copy className="h-4 w-4" /> },
@@ -258,8 +260,18 @@ function LocalModeBanner() {
 function Chrome({ children }: { children: React.ReactNode }) {
   const { loading, user } = useSession();
   const [campaignId, setCampaignId] = useState("");
+  const pathname = usePathname();
+  const router = useRouter();
+  // Picking móvil: los usuarios de almacén aterrizan directamente en su vista.
+  useEffect(() => {
+    if (!loading && user?.role === "almacen" && pathname === "/") router.replace("/picking/movil");
+  }, [loading, user, pathname, router]);
   // C1: en modo supabase, sin sesión real de Supabase Auth no se muestra la app.
   if (isRealAuthMode() && !loading && !user) return <LoginScreen />;
+  // La vista de picking móvil va SIN sidebar/topbar: pantalla completa táctil.
+  if (pathname.startsWith("/picking/movil")) {
+    return <CampaignFilterContext.Provider value={{ campaignId, setCampaignId }}>{loading ? <p className="p-6 text-sm text-slate-400">Cargando...</p> : children}</CampaignFilterContext.Provider>;
+  }
   return (
     <CampaignFilterContext.Provider value={{ campaignId, setCampaignId }}>
       <LocalModeBanner />
