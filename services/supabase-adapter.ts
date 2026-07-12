@@ -434,7 +434,7 @@ async function listUsers() {
     username: str(r.username),
     displayName: str(r.display_name || r.username),
     email: null,
-    role: (str(r.role) === "admin" ? "administracion" : "gestor") as CollectionTypeMap["users"]["role"],
+    role: (str(r.role) === "admin" ? "administracion" : str(r.role) === "almacen" ? "almacen" : "gestor") as CollectionTypeMap["users"]["role"],
     active: r.active !== false,
     provinces: Array.isArray(r.provinces) ? (r.provinces as string[]) : [],
     ...syncFromDb(r)
