@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ImportRow, ImportType } from "@/types";
 import {
-  templates, parsePaste, validateRows, summarize, confirmImport, listImportBatches
+  templates, parsePaste, validateRows, summarize, confirmImport, listImportBatches, vinylIsCustom, standardVinyl
 } from "@/services/imports.service";
 import { useSession } from "@/components/session-provider";
 import { useData } from "@/components/use-data";
@@ -92,6 +92,12 @@ export default function ImportacionesPage() {
           <p className="mt-1">Puedes incluir o no la fila de cabecera. Pega directamente desde Excel (se separa por tabuladores).</p>
         </div>
 
+        {type === "isdin_vinilos" && (
+          <div className="mt-2 rounded-md bg-blue-50 p-2 text-xs text-blue-700">
+            <strong>A medida vs Standard.</strong> La columna <code>recordType</code> (o «tipo») decide el tratamiento: los <strong>«a medida»</strong> se crean como piezas únicas <em>pendientes de recepción</em> — hay que <strong>confirmar la entrada</strong> en Piezas. Los <strong>«standard»</strong> se agrupan como stock por campaña y medidas (ej. <code>STANDARD - MINIONS 120X150</code>). Sin valor en esa columna se asume «a medida».
+          </div>
+        )}
+
         <div className="mt-3">
           <Field label="Pega aqui las filas desde Excel">
             <Textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={type === "isdin_vinilos" ? "VIN-31195\tISDIN\tCECO-ISDIN-01\tISDIN Vinilos...\tFarmacia Diagonal\t..." : "Pega las filas..."} />
@@ -120,14 +126,19 @@ export default function ImportacionesPage() {
           <div className="max-h-96 overflow-auto">
             <Table headers={["#", "Clave", "Destino", "Estado", "Errores"]}>
               {rows.map((r) => {
-                const key = r.raw.vinCode || r.raw.officeCode || r.raw.materialCode || r.raw.name || "-";
+                const isdinStandard = type === "isdin_vinilos" && !vinylIsCustom(r.raw);
+                const key = isdinStandard ? standardVinyl(r.raw).code : (r.raw.vinCode || r.raw.officeCode || r.raw.materialCode || r.raw.name || "-");
                 const dest = r.raw.pharmacyName || r.raw.pointOfSaleName || r.raw.officeName || "-";
                 return (
                   <tr key={r.rowIndex} className={!r.valid ? "bg-red-50/40" : r.duplicate ? "bg-amber-50/40" : ""}>
                     <Td className="text-gray-400">{r.rowIndex}</Td>
                     <Td className="font-mono text-xs">{key}</Td>
                     <Td className="text-xs">{dest}</Td>
-                    <Td>{r.valid ? <Badge tone="green">OK</Badge> : <Badge tone="red">Error</Badge>}{r.duplicate ? <Badge tone="amber">Duplicado</Badge> : null}</Td>
+                    <Td>
+                      {r.valid ? <Badge tone="green">OK</Badge> : <Badge tone="red">Error</Badge>}
+                      {r.duplicate ? <Badge tone="amber">Duplicado</Badge> : null}
+                      {type === "isdin_vinilos" ? <Badge tone={vinylIsCustom(r.raw) ? "purple" : "blue"}>{vinylIsCustom(r.raw) ? "A medida" : "Standard"}</Badge> : null}
+                    </Td>
                     <Td className="text-xs text-red-600">{r.errors.join("; ")}</Td>
                   </tr>
                 );

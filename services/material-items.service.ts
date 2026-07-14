@@ -6,6 +6,7 @@
 import { MaterialItem } from "@/types";
 import { makeCrud } from "@/services/crud";
 import { getAdapter } from "@/services/adapter";
+import { recordMovement } from "@/services/stock.service";
 
 const crud = makeCrud("materialItems", "itm");
 
@@ -39,4 +40,26 @@ export const createMaterialItem = (input: Parameters<typeof crud.create>[0], act
 export async function existingCodeSet(): Promise<Set<string>> {
   const items = await getAdapter().list("materialItems");
   return new Set(items.map((it) => normalizeItemCode(it.itemCode)));
+}
+
+/**
+ * Feature 4: confirma la entrada en almacen de una pieza "a medida"
+ * (pendiente_recepcion -> recibido) y registra el movimiento de entrada. Es la
+ * accion "confirmar la entrada" que exigen los vinilos a medida de ISDIN.
+ */
+export async function confirmMaterialItemEntry(item: MaterialItem, actorId?: string | null): Promise<MaterialItem> {
+  if (item.status !== "pendiente_recepcion") return item;
+  const updated = await crud.update(item.id, { status: "recibido" }, actorId);
+  await recordMovement({
+    materialItemId: item.id,
+    clientId: item.clientId,
+    campaignId: item.campaignId ?? null,
+    type: "entrada",
+    quantity: 1,
+    reason: `Confirmacion de entrada (VIN ${item.itemCode})`,
+    relatedEntityType: "material_item",
+    relatedEntityId: item.id,
+    actorId
+  });
+  return updated;
 }

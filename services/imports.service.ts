@@ -32,7 +32,7 @@ export const templates: Record<ImportType, string[]> = {
   isdin_vinilos: [
     "vinCode", "clientName", "ceco", "campaignName", "pharmacyName", "pointOfSaleName",
     "address", "city", "province", "postalCode", "week", "height", "width", "quantity",
-    "installer", "serviceCode", "notes"
+    "installer", "serviceCode", "notes", "recordType"
   ],
   banc_sabadell: [
     "officeCode", "officeName", "clientName", "ceco", "campaignName", "address", "city",
@@ -90,6 +90,32 @@ function num(value: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+const stripAccents = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+/**
+ * Feature 4: clasifica un vinilo ISDIN como "a medida" o "standard" segun la
+ * columna de tipo del archivo (recordType / tipo / record_type / clase...). Sin
+ * dato -> a medida (criterio conservador: exigira confirmar la entrada en LOGS).
+ */
+export function vinylIsCustom(r: Record<string, string>): boolean {
+  const raw = stripAccents(String(r.recordType ?? r.tipo ?? r.Tipo ?? r["record_type"] ?? r.tipoVinilo ?? r.clase ?? "").toLowerCase()).trim();
+  if (!raw) return true;
+  if (raw.includes("estandar") || raw.includes("standard")) return false;
+  return true;
+}
+
+/** Nombre + codigo agrupador de un vinilo standard: "STANDARD - MINIONS 120X150". */
+export function standardVinyl(r: Record<string, string>): { name: string; code: string; medidas: string } {
+  const campaign = (r.campaignName || "").trim().toUpperCase();
+  const w = num(r.width) !== null ? String(num(r.width)) : "";
+  const h = num(r.height) !== null ? String(num(r.height)) : "";
+  const medidas = w && h ? `${w}X${h}` : (w || h || "");
+  const label = [campaign, medidas].filter(Boolean).join(" ");
+  const name = label ? `STANDARD - ${label}` : "STANDARD";
+  const code = normalizeItemCode(["STD", campaign.replace(/\s+/g, "_"), medidas].filter(Boolean).join("-"));
+  return { name, code, medidas };
+}
+
 /**
  * Valida las filas segun la plantilla. Detecta campos obligatorios, formatos y
  * duplicados (dentro del propio pegado y contra los datos ya existentes).
@@ -104,17 +130,24 @@ export async function validateRows(type: ImportType, rows: ImportRow[]): Promise
     const r = row.raw;
 
     if (type === "isdin_vinilos") {
+      const custom = vinylIsCustom(r);
       const code = normalizeItemCode(r.vinCode || "");
-      if (!code) errors.push("vinCode obligatorio");
-      else if (!VIN_RE.test(code)) errors.push(`vinCode con formato invalido (esperado VIN-XXXXX): ${r.vinCode}`);
+      if (custom) {
+        // A medida: pieza unica identificada por su VIN.
+        if (!code) errors.push("vinCode obligatorio");
+        else if (!VIN_RE.test(code)) errors.push(`vinCode con formato invalido (esperado VIN-XXXXX): ${r.vinCode}`);
+        if (code) {
+          if (seen.has(code) || existing.has(code)) duplicate = true;
+          seen.add(code);
+        }
+      } else if (num(r.width) === null && num(r.height) === null) {
+        // Standard: se agrupa por campaña + medidas; no necesita VIN unico, pero si medidas.
+        errors.push("standard requiere medidas (width/height)");
+      }
       if (!r.clientName) errors.push("clientName obligatorio");
       if (!r.campaignName) errors.push("campaignName obligatorio");
       if (r.height && num(r.height) === null) errors.push("height debe ser numerico");
       if (r.width && num(r.width) === null) errors.push("width debe ser numerico");
-      if (code) {
-        if (seen.has(code) || existing.has(code)) duplicate = true;
-        seen.add(code);
-      }
     } else if (type === "banc_sabadell") {
       if (!r.officeCode && !r.officeName) errors.push("officeCode u officeName obligatorio");
       if (!r.materialName) errors.push("materialName obligatorio");
@@ -230,6 +263,8 @@ async function importIsdinRow(
   actorId?: string | null
 ): Promise<string> {
   const r = row.raw;
+  // Feature 4: los vinilos standard se agrupan como stock; solo los "a medida" son piezas unicas.
+  if (!vinylIsCustom(r)) return importStandardVinyl(r, clientId, campaignId, importBatchId, actorId);
   const item = await createMaterialItem(
     {
       itemCode: normalizeItemCode(r.vinCode),
@@ -253,7 +288,8 @@ async function importIsdinRow(
       serviceId: null,
       serviceCode: r.serviceCode || null,
       location: null,
-      status: "recibido",
+      // A medida: pendiente de confirmar la entrada en LOGS (sin stock hasta confirmar).
+      status: "pendiente_recepcion",
       notes: r.notes || null,
       stockEntryId: null,
       importBatchId,
@@ -264,17 +300,8 @@ async function importIsdinRow(
     } as Omit<MaterialItem, "id" | keyof import("@/types").BaseEntity>,
     actorId
   );
-  await recordMovement({
-    materialItemId: item.id,
-    clientId,
-    campaignId,
-    type: "entrada",
-    quantity: 1,
-    reason: `Importacion ${importBatchId} (VIN ${item.itemCode})`,
-    relatedEntityType: "import_batch",
-    relatedEntityId: importBatchId,
-    actorId
-  });
+  // Sin movimiento de stock todavia: se registra al confirmar la entrada
+  // (confirmMaterialItemEntry en material-items.service.ts).
   return item.id;
 }
 
@@ -390,6 +417,64 @@ async function importGenericRow(
       entryDate: nowIso(),
       supplier: `Importacion ${importBatchId}`,
       deliveryNote: null,
+      receivedBy: actorId ?? null,
+      status: "recibida",
+      notes: r.notes || null
+    },
+    actorId
+  );
+  return materialId;
+}
+
+// Feature 4: vinilo standard -> stock agrupado por campaña + medidas
+// (ej. "STANDARD - MINIONS 120X150"). Busca/crea el material agregado y suma la
+// cantidad como entrada recibida (sin confirmacion, a diferencia de los "a medida").
+async function importStandardVinyl(
+  r: Record<string, string>,
+  clientId: string,
+  campaignId: string | null,
+  importBatchId: string,
+  actorId?: string | null
+): Promise<string> {
+  const { name, code, medidas } = standardVinyl(r);
+  const quantity = Math.max(1, Number((r.quantity || "1").replace(",", ".")) || 1);
+  const materials = await getAdapter().list("materials");
+  const existing = materials.find((m) => m.clientId === clientId && m.materialCode === code);
+  let materialId: string;
+  if (existing) {
+    materialId = existing.id;
+  } else {
+    const created = await materialsService.create(
+      {
+        clientId,
+        campaignId,
+        name,
+        materialCode: code,
+        type: "vinilo",
+        description: "Vinilo standard ISDIN (stock agrupado por campaña y medidas).",
+        dimensions: medidas ? medidas.replace("X", "x") : null,
+        heightCm: r.height ? Number(r.height.replace(",", ".")) : null,
+        widthCm: r.width ? Number(r.width.replace(",", ".")) : null,
+        unit: "ud",
+        currentStock: 0,
+        reservedStock: 0,
+        minimumStock: 0,
+        location: null,
+        status: "activo"
+      } as Omit<import("@/types").Material, "id" | keyof import("@/types").BaseEntity>,
+      actorId
+    );
+    materialId = created.id;
+  }
+  await createEntry(
+    {
+      clientId,
+      campaignId,
+      materialId,
+      quantity,
+      entryDate: nowIso(),
+      supplier: `Importacion ${importBatchId}`,
+      deliveryNote: r.vinCode || null,
       receivedBy: actorId ?? null,
       status: "recibida",
       notes: r.notes || null

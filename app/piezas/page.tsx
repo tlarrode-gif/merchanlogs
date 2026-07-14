@@ -10,14 +10,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Search } from "lucide-react";
-import { MaterialItemStatus } from "@/types";
-import { listMaterialItems } from "@/services/material-items.service";
+import { MaterialItem, MaterialItemStatus } from "@/types";
+import { listMaterialItems, confirmMaterialItemEntry } from "@/services/material-items.service";
 import { getAdapter } from "@/services/adapter";
 import { useSession } from "@/components/session-provider";
 import { useData } from "@/components/use-data";
 import { useCatalog } from "@/components/use-catalog";
 import { Chip, Empty, PageHeader, Panel } from "@/components/lg";
-import { NoAccess } from "@/components/ui";
+import { Button, NoAccess } from "@/components/ui";
 import { materialItemStatusMeta } from "@/lib/status";
 import { MaterialsTabs } from "@/components/materials-tabs";
 
@@ -39,8 +39,8 @@ const LEGEND_COLORS: Record<string, string> = {
 };
 
 export default function PiezasPage() {
-  const { can } = useSession();
-  const { data } = useData(async () => {
+  const { can, user } = useSession();
+  const { data, reload } = useData(async () => {
     const adapter = getAdapter();
     const [items, pickings, shipments, incidents, entries] = await Promise.all([
       listMaterialItems(),
@@ -87,7 +87,14 @@ export default function PiezasPage() {
 
   const selected = filtered.find((i) => i.id === selectedId) ?? null;
 
+  // Feature 4: confirmar la entrada en almacen de una pieza a medida.
+  async function handleConfirmEntry(item: MaterialItem) {
+    await confirmMaterialItemEntry(item, user?.id);
+    reload();
+  }
+
   if (!can("materials.view")) return <NoAccess />;
+  const canConfirm = can("entries.manage");
 
   const trace = selected && data
     ? {
@@ -173,7 +180,11 @@ export default function PiezasPage() {
                       <td className="text-xs">{i.city || i.province || "—"}</td>
                       <td className="max-w-[140px] truncate text-xs">{i.pointOfSaleName || "—"}</td>
                       <td><Chip tone={materialItemStatusMeta[i.status].tone}>{materialItemStatusMeta[i.status].label}</Chip></td>
-                      <td><ChevronRight className="h-4 w-4 text-blue-500" /></td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {i.status === "pendiente_recepcion" && canConfirm
+                          ? <Button variant="ghost" onClick={() => handleConfirmEntry(i)}>Confirmar</Button>
+                          : <ChevronRight className="h-4 w-4 text-blue-500" />}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -204,6 +215,10 @@ export default function PiezasPage() {
                 {selected.installer && (<><span className="text-slate-400">Instalador</span><span className="font-semibold">{selected.installer}</span></>)}
                 {selected.location && (<><span className="text-slate-400">Ubicación</span><span>📍 {selected.location}</span></>)}
               </div>
+
+              {selected.status === "pendiente_recepcion" && canConfirm && (
+                <Button onClick={() => handleConfirmEntry(selected)}>Confirmar entrada en almacén</Button>
+              )}
 
               <div>
                 <p className="lg-kpi-label mb-2">Trazabilidad</p>
