@@ -183,6 +183,7 @@ export default function PickingDetailPage() {
                     <tr key={line.id}>
                       <Td className="text-xs">
                         {line.officeName || line.pointOfSaleName || "-"}
+                        {line.address ? <div className="text-gray-400">{line.address}</div> : null}
                         <div className="text-gray-400">{[line.city, line.province].filter(Boolean).join(", ")}</div>
                         {line.serviceCode ? <div className="font-mono text-gray-400">{line.serviceCode}</div> : null}
                       </Td>

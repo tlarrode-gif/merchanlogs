@@ -94,11 +94,12 @@ export default function EnviosPage() {
       {!shipments?.length ? (
         <EmptyState message="No hay envios." />
       ) : (
-        <Table headers={["Codigo", "Cliente", "Peticion", "Transportista", "Tracking", "Fechas", "Estado", ""]}>
+        <Table headers={["Codigo", "Cliente", "Destino", "Peticion", "Transportista", "Tracking", "Fechas", "Estado", ""]}>
           {shipments.map((s) => (
             <tr key={s.id}>
               <Td className="whitespace-nowrap font-mono text-xs">{s.shipmentCode}</Td>
               <Td>{catalog.clientName(s.clientId)}</Td>
+              <Td className="text-xs">{s.destination || "-"}</Td>
               <Td className="text-xs text-gray-500">{(requests ?? []).find((r) => r.id === s.logisticsRequestId)?.requestCode || "-"}</Td>
               <Td>{s.carrier || "-"}</Td>
               <Td className="font-mono text-xs">{s.trackingNumber || "-"}</Td>
@@ -150,7 +151,9 @@ export default function EnviosPage() {
             <Input type="date" value={isoToDateInput(form.estimatedDeliveryDate)} onChange={(e) => setForm({ ...form, estimatedDeliveryDate: dateInputToIso(e.target.value) })} />
           </Field>
           <div className="md:col-span-2">
-            <Field label="Destino"><Input value={form.destination ?? ""} onChange={(e) => setForm({ ...form, destination: e.target.value })} /></Field>
+            <Field label="Destino (dirección de envío)" hint="Si el envío procede de una petición, se rellena con la dirección de envío del trabajador (o, en su defecto, la del punto).">
+              <Input value={form.destination ?? ""} onChange={(e) => setForm({ ...form, destination: e.target.value })} />
+            </Field>
           </div>
           <div className="md:col-span-2">
             <Field label="Notas"><Textarea rows={2} value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
